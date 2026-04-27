@@ -92,13 +92,16 @@ function IconButton({ children, active, onClick, title }: { children: React.Reac
 }
 
 const PHASES = [
-  { id: 'CORE-1A', code: '1A', kind: 'process' },
-  { id: 'CORE-1B', code: '1B', kind: 'process' },
-  { id: 'CORE-1C', code: '1C', kind: 'process' },
-  { id: 'CORE-1D', code: '1D', kind: 'process' },
-  { id: 'CORE-1E', code: '1E', kind: 'process' },
-  { id: 'PHASE-3', code: 'P3', kind: 'process' },
-  { id: 'STUDIO', code: 'ST', kind: 'read' },
+  { id: "core-0", code: "CORE-0", label: "Reference Board", kind: "intake", op: 'Extract' },
+  { id: "core-1a", code: "CORE-1A", label: "Extract Locks", kind: "read", op: 'Extract' },
+  { id: "core-1b", code: "CORE-1B", label: "Create Base v1", kind: "build", op: 'Creative' },
+  { id: "core-1c", code: "CORE-1C", label: "Surgical Edit", kind: "edit", op: 'Surgical' },
+  { id: "core-1d", code: "CORE-1D", label: "Localized Edit", kind: "edit", op: 'Surgical' },
+  { id: "core-1e", code: "CORE-1E", label: "Creative Edit", kind: "edit", op: 'Creative' },
+  { id: "tat-2", code: "TAT-2", label: "Placement Fit", kind: "tattoo", op: 'Mockup' },
+  { id: "tat-3", code: "TAT-3", label: "Variant Sheet", kind: "tattoo", op: 'Variant' },
+  { id: "tat-4", code: "TAT-4", label: "Stencil", kind: "export", op: 'Stencil' },
+  { id: "tat-5", code: "TAT-5", label: "Skin Mockup", kind: "mockup", op: 'Mockup' },
 ];
 
 function StudioCommandDock({
@@ -223,8 +226,31 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'info' | 'error' } | null>(null);
   const [chrome, setChrome] = useState(true);
+  const [activePhaseId, setActivePhaseId] = useState('core-1c');
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
+
+  const handleEnhancePrompt = async () => {
+    if (!request.trim() || busy) return;
+    setBusy('Optimizing Instruction');
+    try {
+      const response = await fetch('/api/ai/optimize-text', {
+        method: 'POST',
+        body: JSON.stringify({
+          originalText: request,
+          fieldKind: 'creative',
+        }),
+      });
+      const data = await response.json();
+      if (data.artifacts?.optimizedText) {
+        setRequest(data.artifacts.optimizedText);
+      }
+    } catch (err: any) {
+      setMessage({ text: `Enhance failed: ${err.message}`, type: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   // Control State
   const [operation, setOperation] = useState<Operation>(
@@ -244,14 +270,8 @@ export function StudioClient({ detail }: StudioClientProps) {
   }, [operation]);
 
   const currentPhase = useMemo(() => {
-    switch (operation) {
-      case 'Extract': return 'CORE-1A';
-      case 'Surgical': return 'CORE-1D';
-      case 'Creative': return 'CORE-1C';
-      case 'Variant': return 'PHASE-3';
-      default: return 'STUDIO';
-    }
-  }, [operation]);
+    return PHASES.find(p => p.id === activePhaseId)?.code || 'STUDIO';
+  }, [activePhaseId]);
   const [request, setRequest] = useState('');
   const [status, setStatus] = useState('Ready');
   const [fidelity, setFidelity] = useState(60);
@@ -621,18 +641,21 @@ export function StudioClient({ detail }: StudioClientProps) {
         <button onClick={() => router.push('/')} className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white" title="Go Back">
           <ArrowLeft size={18} />
         </button>
-        <div className="tls-topbar-badge !bg-[#fbbf24] !text-[#211500]">{operation === 'Extract' ? 'CORE-1A' : operation === 'Mockup' ? 'PHASE-3' : 'STUDIO'}</div>
+        <div className="tls-topbar-badge !bg-[#fbbf24] !text-[#211500]">{currentPhase}</div>
         <span className="tls-topbar-title font-black text-white/92 tracking-[0.14em] uppercase">{operationLabel}</span>
       </div>
 
       <nav className="tls-phase-track">
-        {['CORE-0', 'CORE-1A', 'CORE-1B', 'CORE-1C', 'CORE-1D', 'CORE-1E', 'TATTOO'].map((phase) => (
+        {PHASES.map((p) => (
           <div
-            key={phase}
-            className={`tls-phase-tab ${phase === 'CORE-1A' ? 'active' : ''}`}
-            onClick={() => phase === 'CORE-1A' ? setOperation('Extract') : null}
+            key={p.id}
+            className={`tls-phase-tab ${activePhaseId === p.id ? 'active' : ''}`}
+            onClick={() => {
+              setActivePhaseId(p.id);
+              setOperation(p.op as Operation);
+            }}
           >
-            {phase}
+            {p.code}
           </div>
         ))}
       </nav>
@@ -861,7 +884,7 @@ export function StudioClient({ detail }: StudioClientProps) {
           <StudioCommandDock
             activeDrawer={activeDrawer}
             setActiveDrawer={setActiveDrawer}
-            activePhase={currentPhase}
+            activePhase={activePhaseId}
             runPhaseAction={handleRun}
             chrome={chrome}
             setChrome={setChrome}
@@ -892,6 +915,14 @@ export function StudioClient({ detail }: StudioClientProps) {
                 />
                 <button onClick={handleMicToggle} className={`h-8 w-8 grid place-items-center rounded-lg cursor-pointer transition-colors ${voiceStatus === 'listening' ? 'bg-tls-amber/20 text-tls-amber' : 'text-white/40 hover:bg-white/10'}`}>
                   {voiceStatus === 'listening' ? <Mic size={14} /> : <MicOff size={14} />}
+                </button>
+                <button 
+                  onClick={handleEnhancePrompt} 
+                  disabled={!!busy || !request.trim()}
+                  className="h-8 flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-3 text-[9px] font-black uppercase tracking-widest text-white/50 hover:bg-white/10 hover:text-white transition-all disabled:opacity-30"
+                >
+                  <Sparkles size={12} />
+                  <span>Refine</span>
                 </button>
               </div>
             </div>
