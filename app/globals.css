@@ -1,0 +1,1074 @@
+@import "tailwindcss" source(none);
+
+@source "../app/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../components/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../hooks/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../lib/**/*.{js,ts,jsx,tsx,mdx}";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* connect-to-prompts / shadcn base theme */
+  --font-size: 16px;
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #030213;
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Artlock / Tattoo Lock System tokens */
+  --tls-bg: #080807;
+  --tls-panel: rgba(0, 0, 0, 0.45);
+  --tls-panel-heavy: rgba(0, 0, 0, 0.72);
+  --tls-surface: rgba(255, 255, 255, 0.06);
+  --tls-border: rgba(255, 255, 255, 0.10);
+  --tls-border-soft: rgba(255, 255, 255, 0.06);
+  --tls-artboard: #e8dfcf;
+  --tls-artboard-frame: #15120d;
+  --tls-amber: #fbbf24;
+  --tls-amber-soft: rgba(251, 191, 36, 0.18);
+  --tls-emerald: #34d399;
+  --tls-sky: #38bdf8;
+  --tls-text: rgba(255, 255, 255, 0.92);
+  --tls-muted: rgba(255, 255, 255, 0.56);
+  --tls-faint: rgba(255, 255, 255, 0.34);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  /* connect-to-prompts / shadcn utilities */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Artlock / Tattoo Lock System utilities */
+  --color-tls-bg: var(--tls-bg);
+  --color-tls-panel: var(--tls-panel);
+  --color-tls-panel-heavy: var(--tls-panel-heavy);
+  --color-tls-surface: var(--tls-surface);
+  --color-tls-border: var(--tls-border);
+  --color-tls-border-soft: var(--tls-border-soft);
+  --color-tls-artboard: var(--tls-artboard);
+  --color-tls-artboard-frame: var(--tls-artboard-frame);
+  --color-tls-amber: var(--tls-amber);
+  --color-tls-amber-soft: var(--tls-amber-soft);
+  --color-tls-emerald: var(--tls-emerald);
+  --color-tls-sky: var(--tls-sky);
+  --color-tls-text: var(--tls-text);
+  --color-tls-muted: var(--tls-muted);
+  --color-tls-faint: var(--tls-faint);
+  --radius-tls-16: 16px;
+  --radius-tls-20: 20px;
+  --radius-tls-28: 28px;
+  --radius-tls-34: 34px;
+  --shadow-tls-panel: 0 18px 60px rgba(0, 0, 0, 0.45);
+  --shadow-tls-heavy: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --shadow-tls-artboard: 0 48px 160px rgba(0, 0, 0, 0.72);
+  --blur-tls-28: 28px;
+  --blur-tls-32: 32px;
+  --animate-tls-slide-down: tls-slide-down 0.4s ease-out;
+  --animate-tls-slide-up: tls-slide-up 0.22s ease-out;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--tls-bg);
+    color: var(--tls-text);
+    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h4,
+  label,
+  button {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@keyframes tls-slide-down {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes tls-slide-up {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+
+@keyframes caret-blink {
+  0%, 70%, 100% { opacity: 1; }
+  20%, 50% { opacity: 0; }
+}
+
+@layer utilities {
+  /* CSS fallbacks for Artlock token utilities used by existing TSX. */
+  .bg-tls-bg { background-color: var(--tls-bg); }
+  .bg-tls-panel { background-color: var(--tls-panel); }
+  .bg-tls-panel-heavy { background-color: var(--tls-panel-heavy); }
+  .bg-tls-surface { background-color: var(--tls-surface); }
+  .bg-tls-amber { background-color: var(--tls-amber); }
+  .bg-tls-amber-soft { background-color: var(--tls-amber-soft); }
+  .bg-tls-emerald { background-color: var(--tls-emerald); }
+  .bg-tls-sky { background-color: var(--tls-sky); }
+  .bg-tls-artboard { background-color: var(--tls-artboard); }
+  .bg-tls-artboard-frame { background-color: var(--tls-artboard-frame); }
+  .text-tls-text { color: var(--tls-text); }
+  .text-tls-muted { color: var(--tls-muted); }
+  .text-tls-faint { color: var(--tls-faint); }
+  .text-tls-amber { color: var(--tls-amber); }
+  .text-tls-emerald { color: var(--tls-emerald); }
+  .text-tls-sky { color: var(--tls-sky); }
+  .border-tls-border { border-color: var(--tls-border); }
+  .border-tls-border-soft { border-color: var(--tls-border-soft); }
+  .border-tls-amber { border-color: var(--tls-amber); }
+  .border-l-tls-amber { border-left-color: var(--tls-amber); }
+  .accent-tls-amber { accent-color: var(--tls-amber); }
+  .backdrop-blur-tls-28 { backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); }
+  .backdrop-blur-tls-32 { backdrop-filter: blur(32px); -webkit-backdrop-filter: blur(32px); }
+  .shadow-tls-panel { box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45); }
+  .shadow-tls-heavy { box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); }
+  .shadow-tls-artboard { box-shadow: 0 48px 160px rgba(0, 0, 0, 0.72); }
+  .rounded-tls-16 { border-radius: 16px; }
+  .rounded-tls-20 { border-radius: 20px; }
+  .rounded-tls-28 { border-radius: 28px; }
+  .rounded-tls-34 { border-radius: 34px; }
+  .animate-tls-slide-down { animation: tls-slide-down 0.4s ease-out; }
+  .animate-tls-slide-up { animation: tls-slide-up 0.22s ease-out; }
+  .animate-accordion-down { animation: accordion-down 0.2s ease-out; }
+  .animate-accordion-up { animation: accordion-up 0.2s ease-out; }
+  .animate-caret-blink { animation: caret-blink 1.25s ease-out infinite; }
+}
+
+/* ─── Shell ─────────────────────────────────────────── */
+.tls-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  --tls-stage-left: 0px;
+  --tls-stage-right: 0px;
+  --tls-stage-top: 0px;
+  --tls-stage-bottom: 0px;
+  --tls-stage-gutter: 48px;
+  --tls-stage-shift-x: 0px;
+  --tls-stage-shift-y: 0px;
+  background:
+    radial-gradient(circle at center, #201812 0%, #090807 64%),
+    #080807;
+}
+
+.tls-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image:
+    linear-gradient(#fff 1px, transparent 1px),
+    linear-gradient(90deg, #fff 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.tls-shell--chrome {
+  --tls-stage-left: 96px;
+  --tls-stage-top: 96px;
+  --tls-stage-bottom: 118px;
+  --tls-stage-shift-x: 36px;
+  --tls-stage-shift-y: -10px;
+}
+
+.tls-shell--drawer-open {
+  --tls-stage-right: 392px;
+  --tls-stage-shift-x: -148px;
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* ─── Shared glass mixin ─────────────────────────────── */
+  .tls-topbar,
+  .tls-drawer,
+  .tls-command,
+  .tls-hud,
+  .tls-radial-item {
+    background: var(--tls-panel);
+    border: 1px solid var(--tls-border);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+  }
+
+  /* ─── Top bar ────────────────────────────────────────── */
+  .tls-topbar {
+    position: absolute;
+    top: 22px;
+    left: 18px;
+    right: 18px;
+    height: 54px;
+    border-radius: 999px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+  .tls-topbar > div {
+    min-width: 0;
+  }
+  .tls-topbar > div:first-child {
+    flex: 0 1 auto;
+  }
+  .tls-topbar > div:last-child {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tls-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: #34d399;
+    box-shadow: 0 0 10px #34d399;
+    margin: 0 8px;
+  }
+  .tls-topbar-badge {
+    background: var(--tls-amber);
+    color: #211500;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .tls-topbar-title {
+    color: var(--tls-text);
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-left: 10px;
+    max-width: min(28vw, 260px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tls-phase-track {
+    flex: 1 1 auto;
+    min-width: 150px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0 16px;
+  }
+  .tls-phase-track::-webkit-scrollbar { display: none; }
+  .tls-phase-tab {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .tls-phase-tab.active {
+    background: white;
+    color: black;
+  }
+
+  /* ─── Sidebar & Floating Tools ────────────────────────── */
+  .tls-side-menu-btn {
+    position: absolute;
+    left: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.56);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 30;
+    transition: all 0.2s;
+  }
+  .tls-side-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+  }
+
+  .tls-floating-toolbar {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    width: 40px;
+    padding: 8px 0;
+    border-radius: 999px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    z-index: 30;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  }
+  .tls-floating-tool-icon {
+    color: rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tls-floating-tool-icon:hover {
+    color: black;
+  }
+
+  .tls-topbar-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    color: var(--tls-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tls-topbar-icon:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--tls-text);
+  }
+  .tls-topbar-icon.active {
+    background: var(--tls-amber);
+    color: #211500;
+  }
+
+  /* ─── Artboard frame + canvas ────────────────────────── */
+  .tls-artboard-frame {
+    position: absolute;
+    left: calc(50% + var(--tls-stage-shift-x));
+    top: calc(50% + var(--tls-stage-shift-y));
+    width: min(
+      70vw,
+      calc(100vw - var(--tls-stage-left) - var(--tls-stage-right) - var(--tls-stage-gutter)),
+      calc(100dvh - var(--tls-stage-top) - var(--tls-stage-bottom) - 32px),
+      760px
+    );
+    max-height: 760px;
+    aspect-ratio: 1 / 1;
+    transform: translate(-50%, -50%);
+    border-radius: 34px;
+    padding: 28px;
+    background: #15120e;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 48px 160px rgba(0, 0, 0, 0.72);
+    z-index: 5;
+  }
+
+  .tls-artboard {
+    width: 100%;
+    height: 100%;
+    border-radius: 28px;
+    background: #e8dfce;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .tls-artboard-badge {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    padding: 8px 18px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    color: rgba(0, 0, 0, 0.58);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* ─── Right drawer ───────────────────────────────────── */
+  .tls-drawer {
+    position: absolute;
+    top: 92px;
+    right: 24px;
+    width: clamp(320px, 31vw, 360px);
+    max-height: calc(100dvh - 140px);
+    border-radius: 28px;
+    z-index: 40;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tls-drawer-header {
+    padding: 22px 22px 18px;
+    border-bottom: 1px solid var(--tls-border-soft);
+    flex-shrink: 0;
+  }
+  .tls-drawer-title {
+    color: var(--tls-text);
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1.05;
+    margin: 4px 0;
+  }
+  .tls-drawer-desc {
+    color: var(--tls-muted);
+    font-size: 13px;
+    line-height: 1.5;
+    margin-top: 8px;
+  }
+  .tls-drawer-body {
+    padding: 18px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .tls-section-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .tls-phase-badge {
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: var(--tls-emerald);
+    color: #0a1f14;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .tls-draft-badge {
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: var(--tls-amber);
+    color: #211500;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .tls-card-row {
+    min-height: 60px;
+    border-radius: 14px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .tls-card-row-title {
+    color: var(--tls-text);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .tls-card-row-sub {
+    color: var(--tls-faint);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .tls-row-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+  }
+  .tls-row-dot.filled {
+    background: var(--tls-emerald);
+    box-shadow: 0 0 10px rgba(52, 211, 153, 0.6);
+  }
+
+  /* ─── Bottom command bar ─────────────────────────────── */
+  .tls-command {
+    position: absolute;
+    left: calc(50% + var(--tls-stage-shift-x));
+    bottom: 22px;
+    width: min(
+      720px,
+      calc(100vw - var(--tls-stage-left) - var(--tls-stage-right) - var(--tls-stage-gutter))
+    );
+    transform: translateX(-50%);
+    border-radius: 28px;
+    padding: 12px;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .tls-command > .flex-1 {
+    min-width: 0;
+  }
+  .tls-command-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--tls-text);
+    font-size: 14px;
+    height: 44px;
+    padding: 0 4px;
+  }
+  .tls-command-input::placeholder {
+    color: var(--tls-faint);
+  }
+  .tls-readonly-pill {
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--tls-border);
+    color: var(--tls-faint);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* ─── Run button (amber) ─────────────────────────────── */
+  .tls-run-btn {
+    border: 0;
+    border-radius: 16px;
+    background: var(--tls-amber);
+    color: #211500;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    height: 48px;
+    padding: 0 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.25);
+  }
+  .tls-run-btn:hover:not(:disabled) {
+    background: white;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(255, 255, 255, 0.2);
+  }
+  .tls-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ─── Drawer CTA (white, full-width) ─────────────────── */
+  .tls-drawer-cta {
+    border: 0;
+    border-radius: 16px;
+    background: white;
+    color: #111;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    height: 48px;
+    margin: 0 18px 18px;
+    cursor: pointer;
+    width: calc(100% - 36px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.18s;
+  }
+  .tls-drawer-cta:hover:not(:disabled) { background: rgba(255,255,255,0.85); }
+  .tls-drawer-cta:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ─── Status dot ─────────────────────────────────────── */
+  .tls-status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--tls-emerald);
+    box-shadow: 0 0 18px rgba(52, 211, 153, 0.7);
+  }
+
+  /* ─── Typography helpers ─────────────────────────────── */
+  .tls-label {
+    color: var(--tls-muted);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  /* ─── Rounded radius tokens ─────────────────────────── */
+  .rounded-tls-28 { border-radius: 28px; }
+  .rounded-tls-16 { border-radius: 16px; }
+  .rounded-tls-34 { border-radius: 34px; }
+
+  /* ─── Vertical tool rail ───────────────────────────── */
+  .tls-vertical-tools {
+    position: absolute;
+    right: 28px;
+    bottom: 100px;
+    width: 44px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    color: black;
+    z-index: 50;
+    padding: 10px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .tls-tool-icon {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    color: rgba(0, 0, 0, 0.6);
+    transition: color 0.15s;
+  }
+  .tls-tool-icon:hover { color: black; }
+
+  .tls-left-rail {
+    z-index: 50;
+  }
+
+  /* ─── Radial Quick Menu ─────────────────────────────── */
+  .tls-radial-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    background: rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .tls-radial-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 260px;
+    height: 260px;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    border: 1px solid var(--tls-border-soft);
+  }
+  .tls-radial-center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 52px;
+    height: 52px;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    background: white;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    z-index: 82;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .tls-radial-center:hover {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  .tls-radial-item {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    height: 44px;
+    padding: 0 18px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.80);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.92);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+    cursor: pointer;
+    z-index: 82;
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+  }
+  .tls-radial-item:hover {
+    background: rgba(0, 0, 0, 0.92);
+    border-color: rgba(255, 255, 255, 0.18);
+    color: white;
+  }
+  .tls-radial-item.active {
+    background: var(--tls-amber);
+    color: #211500;
+    border-color: transparent;
+  }
+
+  .tls-radial-item:focus-visible,
+  .tls-topbar-icon:focus-visible,
+  .tls-run-btn:focus-visible,
+  .tls-drawer-cta:focus-visible {
+    outline: 2px solid var(--tls-amber);
+    outline-offset: 3px;
+  }
+
+  @media (max-width: 1024px) {
+    .tls-shell--chrome {
+      --tls-stage-left: 84px;
+      --tls-stage-top: 92px;
+      --tls-stage-bottom: 118px;
+      --tls-stage-shift-x: 28px;
+    }
+
+    .tls-shell--drawer-open {
+      --tls-stage-right: 356px;
+      --tls-stage-shift-x: -136px;
+    }
+
+    .tls-topbar {
+      left: 14px;
+      right: 14px;
+      top: 14px;
+      height: 50px;
+      padding: 0 12px;
+    }
+
+    .tls-topbar-badge,
+    .tls-phase-tab {
+      letter-spacing: 0.14em;
+    }
+
+    .tls-phase-tab {
+      padding: 6px 12px;
+    }
+
+    .tls-artboard-frame {
+      padding: 24px;
+      border-radius: 28px;
+    }
+
+    .tls-artboard {
+      border-radius: 24px;
+    }
+
+    .tls-drawer {
+      top: 80px;
+      right: 16px;
+      width: 324px;
+      max-height: calc(100dvh - 126px);
+      border-radius: 24px;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .tls-shell--chrome,
+    .tls-shell--drawer-open {
+      --tls-stage-left: 0px;
+      --tls-stage-right: 0px;
+      --tls-stage-top: 104px;
+      --tls-stage-bottom: 174px;
+      --tls-stage-gutter: 28px;
+      --tls-stage-shift-x: 0px;
+      --tls-stage-shift-y: -18px;
+    }
+
+    .tls-topbar {
+      left: 12px;
+      right: 12px;
+      top: 12px;
+      height: auto;
+      min-height: 52px;
+      flex-wrap: wrap;
+      border-radius: 24px;
+      padding: 8px;
+      row-gap: 6px;
+    }
+
+    .tls-topbar-title {
+      max-width: calc(100vw - 250px);
+      font-size: 12px;
+    }
+
+    .tls-phase-track {
+      order: 3;
+      flex-basis: 100%;
+      min-width: 0;
+      padding: 0;
+    }
+
+    .tls-phase-tab {
+      padding: 6px 10px;
+      font-size: 10px;
+    }
+
+    .tls-artboard-frame {
+      width: min(
+        calc(100vw - 28px),
+        calc(100dvh - var(--tls-stage-top) - var(--tls-stage-bottom) - 18px)
+      );
+      padding: 16px;
+      border-radius: 24px;
+    }
+
+    .tls-artboard {
+      border-radius: 20px;
+    }
+
+    .tls-artboard-badge {
+      top: 14px;
+      left: 14px;
+      max-width: calc(100% - 28px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 7px 12px;
+      font-size: 10px;
+    }
+
+    .tls-drawer {
+      left: 12px;
+      right: 12px;
+      top: auto;
+      bottom: 92px;
+      width: auto;
+      max-height: 38dvh;
+      border-radius: 22px;
+    }
+
+    .tls-drawer-header {
+      padding: 16px 16px 12px;
+    }
+
+    .tls-drawer-title {
+      font-size: 18px;
+    }
+
+    .tls-drawer-body {
+      padding: 12px;
+    }
+
+    .tls-command {
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      width: auto;
+      transform: none;
+      border-radius: 22px;
+      align-items: stretch;
+      padding: 10px;
+    }
+
+    .tls-run-btn {
+      width: 96px;
+      padding: 0 14px;
+    }
+
+    .tls-left-rail {
+      left: 12px !important;
+      top: auto !important;
+      bottom: 100px !important;
+      width: auto !important;
+      transform: none !important;
+      flex-direction: row !important;
+      padding: 6px !important;
+      gap: 8px !important;
+      border-radius: 999px !important;
+    }
+  }
+}
+
+

@@ -1,0 +1,3 @@
+ALTER TABLE projects
+  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS gallery_state JSONB NOT NULL DEFAULT '{}'::jsonb;

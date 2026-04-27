@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flat 5 Slice Spinning Radial Wheel Menu</title>
+
+<style>
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(circle at center, #111827 0%, #050814 72%);
+    font-family: system-ui, sans-serif;
+    color: white;
+  }
+
+  .hud {
+    position: relative;
+    width: min(72vmin, 540px);
+    height: min(72vmin, 540px);
+    transform: scale(0.92);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform 220ms ease,
+      opacity 180ms ease;
+  }
+
+  .hud.open {
+    transform: scale(1);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: grab;
+  }
+
+  canvas:active {
+    cursor: grabbing;
+  }
+
+  .center-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 112px;
+    height: 112px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 12px;
+    background: rgba(17, 28, 48, 0.92);
+    border: 2px solid rgba(0, 219, 233, .7);
+    box-shadow:
+      0 0 14px rgba(0, 219, 233, .22);
+    z-index: 5;
+  }
+
+  .center-title {
+    font-size: 11px;
+    color: #fbbf24;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    margin-bottom: 7px;
+  }
+
+  .center-value {
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1.1;
+  }
+
+  .toggle {
+    position: fixed;
+    bottom: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 0;
+    border-radius: 999px;
+    padding: 14px 24px;
+    background: linear-gradient(145deg, #00DBE9, #00b8c4);
+    color: #050814;
+    font-weight: 900;
+    letter-spacing: .08em;
+    cursor: pointer;
+    box-shadow:
+      0 14px 35px rgba(0,0,0,.4),
+      0 0 24px rgba(0, 219, 233, .55);
+  }
+</style>
+</head>
+
+<body>
+
+<div class="hud" id="hud">
+  <canvas id="wheel"></canvas>
+
+  <div class="center-panel">
+    <div>
+      <div class="center-title">Selected</div>
+      <div class="center-value" id="selectedText">None</div>
+    </div>
+  </div>
+</div>
+
+<button class="toggle" id="toggleBtn">OPEN MENU</button>
+
+<script>
+  const items = [
+    { label: "Mockup",   icon: "MKP", color: "#1e3a5f" },
+    { label: "Surgical", icon: "SRG", color: "#1e3a5f" },
+    { label: "Creative", icon: "CRV", color: "#1e3a5f" },
+    { label: "Pose",     icon: "PSE", color: "#1e3a5f" },
+    { label: "Board",    icon: "BRD", color: "#1e3a5f" }
+  ];
+
+  const hud = document.getElementById("hud");
+  const canvas = document.getElementById("wheel");
+  const ctx = canvas.getContext("2d");
+  const selectedText = document.getElementById("selectedText");
+  const toggleBtn = document.getElementById("toggleBtn");
+
+  let selectedIndex = -1;
+  let isOpen = false;
+
+  let wheelRotation = 0;
+  let spinVelocity = 0;
+  let isDragging = false;
+  let lastPointerAngle = 0;
+  let lastPointerTime = 0;
+  let dragMoved = false;
+
+  const config = {
+    outerRadius: 175,
+    innerRadius: 62,
+    gap: 0.022,
+    startOffset: -Math.PI / 2
+  };
+
+  function resizeCanvas() {
+    const rect = hud.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    drawWheel();
+  }
+
+  function openMenu() {
+    isOpen = true;
+    hud.classList.add("open");
+    toggleBtn.textContent = "CLOSE MENU";
+    drawWheel();
+  }
+
+  function closeMenu() {
+    isOpen = false;
+    hud.classList.remove("open");
+    toggleBtn.textContent = "OPEN MENU";
+  }
+
+  function toggleMenu() {
+    isOpen ? closeMenu() : openMenu();
+  }
+
+  function getPointerAngle(event) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    const dx = event.clientX - cx;
+    const dy = event.clientY - cy;
+
+    return Math.atan2(dy, dx);
+  }
+
+  function getMouseSelection(event) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    const dx = event.clientX - cx;
+    const dy = event.clientY - cy;
+
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < config.innerRadius || distance > config.outerRadius + 24) {
+      selectedIndex = -1;
+      selectedText.textContent = "None";
+      drawWheel();
+      return;
+    }
+
+    let angle = Math.atan2(dy, dx) - config.startOffset - wheelRotation;
+
+    while (angle < 0) angle += Math.PI * 2;
+    while (angle >= Math.PI * 2) angle -= Math.PI * 2;
+
+    const slice = (Math.PI * 2) / items.length;
+    selectedIndex = Math.floor(angle / slice);
+
+    selectedText.textContent = items[selectedIndex].icon;
+
+    drawWheel();
+  }
+
+  function drawWheel() {
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+
+    ctx.clearRect(0, 0, width, height);
+
+    const cx = width / 2;
+    const cy = height / 2;
+
+    drawBackgroundGlow(cx, cy);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(wheelRotation);
+    ctx.translate(-cx, -cy);
+
+    const slice = (Math.PI * 2) / items.length;
+
+    items.forEach((item, index) => {
+      const start = config.startOffset + index * slice + config.gap;
+      const end = config.startOffset + (index + 1) * slice - config.gap;
+      const mid = (start + end) / 2;
+
+      const active = index === selectedIndex;
+
+      drawSegment({
+        cx,
+        cy,
+        inner: config.innerRadius,
+        outer: active ? config.outerRadius + 8 : config.outerRadius,
+        start,
+        end,
+        active
+      });
+
+      drawItemText({
+        cx,
+        cy,
+        angle: mid,
+        radius: active ? 124 : 120,
+        label: item.label,
+        icon: item.icon,
+        active
+      });
+    });
+
+    ctx.restore();
+
+    drawOrangeEdgeGlow(cx, cy);
+    drawInnerRing(cx, cy);
+  }
+
+  function drawBackgroundGlow(cx, cy) {
+    const gradient = ctx.createRadialGradient(cx, cy, 80, cx, cy, 215);
+    gradient.addColorStop(0, "rgba(0, 219, 233, 0.03)");
+    gradient.addColorStop(0.7, "rgba(0, 219, 233, 0.08)");
+    gradient.addColorStop(1, "rgba(0, 219, 233, 0)");
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 215, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+  }
+
+  function drawSegment({ cx, cy, inner, outer, start, end, active }) {
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, outer, start, end);
+    ctx.arc(cx, cy, inner, end, start, true);
+    ctx.closePath();
+
+    ctx.fillStyle = active
+      ? "rgba(30, 58, 95, 0.94)"
+      : "rgba(20, 34, 58, 0.88)";
+
+    ctx.fill();
+
+    ctx.lineWidth = active ? 3 : 2;
+    ctx.strokeStyle = active
+      ? "rgba(0, 219, 233, 0.95)"
+      : "rgba(0, 219, 233, 0.35)";
+
+    ctx.stroke();
+
+    if (active) {
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = "rgba(0, 219, 233, 0.45)";
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawItemText({ cx, cy, angle, radius, label, icon, active }) {
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = active ? "#ffffff" : "#d7dee8";
+    ctx.font = active ? "800 17px system-ui" : "700 15px system-ui";
+    ctx.fillText(icon, x, y - 10);
+
+    ctx.fillStyle = active ? "#dfe7f3" : "#97a6ba";
+    ctx.font = "600 11px system-ui";
+    ctx.fillText(label, x, y + 12);
+
+    ctx.restore();
+  }
+
+  function drawOrangeEdgeGlow(cx, cy) {
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, config.outerRadius + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0, 219, 233, 0.95)";
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = "rgba(0, 219, 233, 0.55)";
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, config.outerRadius + 14, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0, 219, 233, 0.22)";
+    ctx.lineWidth = 6;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "rgba(0, 219, 233, 0.22)";
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawInnerRing(cx, cy) {
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, config.innerRadius + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0, 219, 233, .72)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, config.innerRadius - 6, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0, 219, 233, .18)";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  canvas.addEventListener("pointerdown", event => {
+    if (!isOpen) return;
+
+    isDragging = true;
+    dragMoved = false;
+    canvas.setPointerCapture(event.pointerId);
+
+    lastPointerAngle = getPointerAngle(event);
+    lastPointerTime = performance.now();
+
+    spinVelocity = 0;
+  });
+
+  canvas.addEventListener("pointermove", event => {
+    if (!isOpen) return;
+
+    if (isDragging) {
+      const currentAngle = getPointerAngle(event);
+      const currentTime = performance.now();
+
+      let delta = currentAngle - lastPointerAngle;
+
+      if (delta > Math.PI) delta -= Math.PI * 2;
+      if (delta < -Math.PI) delta += Math.PI * 2;
+
+      if (Math.abs(delta) > 0.002) {
+        dragMoved = true;
+      }
+
+      wheelRotation += delta;
+
+      const dt = Math.max(currentTime - lastPointerTime, 16);
+      spinVelocity = delta / dt;
+
+      lastPointerAngle = currentAngle;
+      lastPointerTime = currentTime;
+
+      getMouseSelection(event);
+      drawWheel();
+      return;
+    }
+
+    getMouseSelection(event);
+  });
+
+  canvas.addEventListener("pointerup", event => {
+    if (!isOpen) return;
+
+    isDragging = false;
+    canvas.releasePointerCapture(event.pointerId);
+
+    if (!dragMoved && selectedIndex !== -1) {
+      const item = items[selectedIndex];
+      selectedText.textContent = item.icon;
+      console.log("Confirmed:", item);
+      closeMenu();
+    }
+  });
+
+  canvas.addEventListener("pointercancel", () => {
+    isDragging = false;
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    if (isDragging) return;
+
+    selectedIndex = -1;
+    selectedText.textContent = "None";
+    drawWheel();
+  });
+
+  toggleBtn.addEventListener("click", toggleMenu);
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      toggleMenu();
+    }
+
+    if (event.key === "Escape") {
+      closeMenu();
+    }
+  });
+
+  function animateSpin() {
+    if (!isDragging && Math.abs(spinVelocity) > 0.00001) {
+      wheelRotation += spinVelocity * 16;
+      spinVelocity *= 0.94;
+      drawWheel();
+    }
+
+    requestAnimationFrame(animateSpin);
+  }
+
+  window.addEventListener("resize", resizeCanvas);
+
+  resizeCanvas();
+  animateSpin();
+
+  // openMenu(); // Default closed
+</script>
+
+</body>
+</html>
