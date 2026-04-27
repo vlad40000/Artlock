@@ -91,6 +91,130 @@ function IconButton({ children, active, onClick, title }: { children: React.Reac
   );
 }
 
+const PHASES = [
+  { id: 'CORE-1A', code: '1A', kind: 'process' },
+  { id: 'CORE-1B', code: '1B', kind: 'process' },
+  { id: 'CORE-1C', code: '1C', kind: 'process' },
+  { id: 'CORE-1D', code: '1D', kind: 'process' },
+  { id: 'CORE-1E', code: '1E', kind: 'process' },
+  { id: 'PHASE-3', code: 'P3', kind: 'process' },
+  { id: 'STUDIO', code: 'ST', kind: 'read' },
+];
+
+function StudioCommandDock({
+  activeDrawer,
+  setActiveDrawer,
+  activePhase,
+  runPhaseAction,
+  chrome,
+  setChrome,
+}: {
+  activeDrawer: string | null;
+  setActiveDrawer: React.Dispatch<React.SetStateAction<string | null>>;
+  activePhase: string;
+  runPhaseAction: () => void;
+  chrome: boolean;
+  setChrome: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const phase = PHASES.find((item) => item.id === activePhase) || PHASES[0];
+
+  const canRun =
+    phase.kind !== "intake" &&
+    phase.kind !== "read";
+
+  const toggleDrawer = (drawer: string) => {
+    setActiveDrawer((prev) => (prev === drawer ? null : drawer));
+  };
+
+  const items = [
+    {
+      id: "locks",
+      label: "Locks",
+      icon: "▣",
+      active: activeDrawer === "locks",
+      onClick: () => toggleDrawer("locks"),
+    },
+    {
+      id: "refs",
+      label: "References",
+      icon: "▧",
+      active: activeDrawer === "refs",
+      onClick: () => toggleDrawer("refs"),
+    },
+    {
+      id: "layers",
+      label: "Layers",
+      icon: "▤",
+      active: activeDrawer === "layers",
+      onClick: () => toggleDrawer("layers"),
+    },
+    {
+      id: "status",
+      label: phase.id,
+      icon: "◉",
+      active: false,
+      onClick: () => toggleDrawer("locks"),
+    },
+  ];
+
+  return (
+    <aside className="absolute left-4 top-1/2 z-50 flex -translate-y-1/2 flex-col items-center gap-2 rounded-full border border-white/10 bg-black/42 p-2 shadow-2xl backdrop-blur-2xl">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          title={item.label}
+          onClick={item.onClick}
+          className={`group relative grid h-12 w-12 place-items-center rounded-full border text-sm font-black transition-all active:scale-95 ${
+            item.active
+              ? "border-amber-300 bg-amber-300 text-black shadow-[0_0_28px_rgba(251,191,36,0.28)]"
+              : "border-white/10 bg-white/[0.06] text-white/70 hover:bg-white hover:text-black"
+          }`}
+        >
+          <span>{item.icon}</span>
+
+          <span className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100">
+            {item.label}
+          </span>
+        </button>
+      ))}
+
+      <div className="my-1 h-px w-8 bg-white/10" />
+
+      <button
+        title={canRun ? "Run phase action" : "Read-only phase"}
+        onClick={runPhaseAction}
+        disabled={!canRun}
+        className={`group relative grid h-12 w-12 place-items-center rounded-full border text-sm font-black transition-all active:scale-95 ${
+          canRun
+            ? "border-white/20 bg-white text-black hover:bg-amber-300"
+            : "border-white/10 bg-white/[0.04] text-white/25"
+        }`}
+      >
+        <span>▶</span>
+
+        <span className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100">
+          {canRun ? "Run" : "Read Only"}
+        </span>
+      </button>
+
+      <button
+        title={chrome ? "Hide UI" : "Show UI"}
+        onClick={() => {
+          setChrome(!chrome);
+          setActiveDrawer(null);
+        }}
+        className="group relative grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-white/[0.06] text-sm font-black text-white/70 transition-all hover:bg-white hover:text-black active:scale-95"
+      >
+        <span>⛶</span>
+
+        <span className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100">
+          {chrome ? "Clear Screen" : "Show UI"}
+        </span>
+      </button>
+    </aside>
+  );
+}
+
 export function StudioClient({ detail }: StudioClientProps) {
   const router = useRouter();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -99,7 +223,6 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'info' | 'error' } | null>(null);
   const [chrome, setChrome] = useState(true);
-  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
 
@@ -735,17 +858,14 @@ export function StudioClient({ detail }: StudioClientProps) {
         <>
           {renderTopBar()}
 
-          {/* SIDE MENU TRIGGER */}
-          <button onClick={() => setQuickMenuOpen(true)} className="tls-side-menu-btn">
-            <LayoutGrid size={22} />
-          </button>
-
-          {/* FLOATING TOOLS */}
-          <aside className="tls-floating-toolbar">
-            <LayoutGrid size={18} className="tls-floating-tool-icon" onClick={() => setActiveDrawer('refs')} />
-            <Sparkles size={18} className="tls-floating-tool-icon" onClick={handleOptimize} />
-            <MoveDiagonal size={18} className="tls-floating-tool-icon" />
-          </aside>
+          <StudioCommandDock
+            activeDrawer={activeDrawer}
+            setActiveDrawer={setActiveDrawer}
+            activePhase={currentPhase}
+            runPhaseAction={handleRun}
+            chrome={chrome}
+            setChrome={setChrome}
+          />
 
           {activeDrawer === 'locks' && renderLocksDrawer()}
           {activeDrawer === 'layers' && renderLayersDrawer()}
@@ -813,37 +933,6 @@ export function StudioClient({ detail }: StudioClientProps) {
             </div>
           )}
         </>
-      )}
-
-      {/* QUICK MENU: RIGHT EDGE COMMAND DOCK */}
-      {quickMenuOpen && (
-        <div className="tls-radial-scrim" onClick={() => setQuickMenuOpen(false)}>
-          <div className="tls-radial-ring" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setQuickMenuOpen(false)} className="tls-radial-center">
-              <Wand2 size={20} className="text-black" />
-            </button>
-            {[
-              { label: "Run Check", icon: <Activity size={14} />, action: handleRun, active: false },
-              { label: "Locks", icon: <Lock size={14} />, action: () => setActiveDrawer('locks'), active: activeDrawer === 'locks' },
-              { label: "References", icon: <LayoutGrid size={14} />, action: () => setActiveDrawer('refs'), active: activeDrawer === 'refs' },
-              { label: "Layers", icon: <History size={14} />, action: () => setActiveDrawer('layers'), active: activeDrawer === 'layers' },
-              { label: "Status", icon: <ShieldCheck size={14} />, action: () => {}, active: true },
-              { label: "Export", icon: <Download size={14} />, action: () => handleSaveToDevice('png'), active: false },
-            ].map((a) => (
-              <button
-                key={a.label}
-                onClick={() => {
-                  a.action();
-                  setQuickMenuOpen(false);
-                }}
-                className={`tls-radial-item ${a.active ? 'active' : ''}`}
-              >
-                {a.icon}
-                <span>{a.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       )}
 
       {/* TOASTS */}
