@@ -12,6 +12,7 @@
 - [x] **E2E Testing Base**: Playwright infrastructure with Auth-Bypass verified.
 - [x] **Build Stability**: Fixed CSS syntax error in `app/globals.css` that caused Vercel build failures.
 - [x] **Remote Sync**: Successfully committed and force-pushed the configured codebase to `vlad40000/Artlock:main`.
+- [x] **Tailwind v4 Build Fix**: Resolved CSS parser crash by removing `source(none)` and implementing `@tailwindcss/postcss` configuration.
 
 ## Current State
 - **Architecture**: Single-screen, canvas-first Studio. Radial-menu-driven operations.
