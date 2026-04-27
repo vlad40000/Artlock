@@ -341,13 +341,14 @@
   --tls-stage-left: 96px;
   --tls-stage-top: 96px;
   --tls-stage-bottom: 118px;
-  --tls-stage-shift-x: 36px;
+  --tls-stage-shift-x: 0px;
   --tls-stage-shift-y: -10px;
 }
 
+/* Drawers float over the canvas. They should not shove the artboard off-center. */
 .tls-shell--drawer-open {
-  --tls-stage-right: 392px;
-  --tls-stage-shift-x: -148px;
+  --tls-stage-right: 0px;
+  --tls-stage-shift-x: 0px;
 }
 
 @layer utilities {
@@ -999,12 +1000,12 @@
       --tls-stage-left: 84px;
       --tls-stage-top: 92px;
       --tls-stage-bottom: 118px;
-      --tls-stage-shift-x: 28px;
+      --tls-stage-shift-x: 0px;
     }
 
     .tls-shell--drawer-open {
-      --tls-stage-right: 356px;
-      --tls-stage-shift-x: -136px;
+      --tls-stage-right: 0px;
+      --tls-stage-shift-x: 0px;
     }
 
     .tls-topbar {

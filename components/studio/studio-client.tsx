@@ -9,6 +9,8 @@ import {
   Activity,
   LoaderCircle,
   ShieldCheck,
+  Play,
+  Check,
   Layers,
   ImagePlus,
   Plus,
@@ -104,6 +106,19 @@ const PHASES = [
   { id: "tat-5", code: "TAT-5", label: "Skin Mockup", kind: "mockup", op: 'Mockup' },
 ];
 
+function RadialNode({ label, icon, angle, radius, primary, onClick }: { label: string; icon: React.ReactNode; angle: number; radius: number; primary?: boolean; onClick: () => void }) {
+  const rad = (angle * Math.PI) / 180;
+  const x = Math.cos(rad) * radius;
+  const y = Math.sin(rad) * radius;
+  return (
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))` }}>
+      <button onClick={onClick} className={`w-28 h-11 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all shadow-2xl ${primary ? 'bg-tls-amber text-black hover:bg-white hover:scale-110' : 'bg-[#2a2a2c]/90 border border-white/10 text-white/80 hover:bg-white/10 backdrop-blur-md'}`}>
+        {icon}{label}
+      </button>
+    </div>
+  );
+}
+
 function StudioCommandDock({
   activeDrawer,
   setActiveDrawer,
@@ -111,6 +126,7 @@ function StudioCommandDock({
   runPhaseAction,
   chrome,
   setChrome,
+  setShowQuickMenu,
 }: {
   activeDrawer: string | null;
   setActiveDrawer: React.Dispatch<React.SetStateAction<string | null>>;
@@ -118,6 +134,7 @@ function StudioCommandDock({
   runPhaseAction: () => void;
   chrome: boolean;
   setChrome: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowQuickMenu: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const phase = PHASES.find((item) => item.id === activePhase) || PHASES[0];
 
@@ -130,6 +147,13 @@ function StudioCommandDock({
   };
 
   const items = [
+    {
+      id: "menu",
+      label: "Quick Menu",
+      icon: "▦",
+      active: false,
+      onClick: () => setShowQuickMenu(true),
+    },
     {
       id: "locks",
       label: "Locks",
@@ -151,17 +175,13 @@ function StudioCommandDock({
       active: activeDrawer === "layers",
       onClick: () => toggleDrawer("layers"),
     },
-    {
-      id: "status",
-      label: phase.id,
-      icon: "◉",
-      active: false,
-      onClick: () => toggleDrawer("locks"),
-    },
   ];
 
   return (
     <aside className="absolute left-4 top-1/2 z-50 flex -translate-y-1/2 flex-col items-center gap-2 rounded-full border border-white/10 bg-black/42 p-2 shadow-2xl backdrop-blur-2xl">
+      <div className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-[9px] font-black uppercase tracking-[0.08em] text-white/45" title={`Current phase: ${phase.id}`}>
+        {phase.code}
+      </div>
       {items.map((item) => (
         <button
           key={item.id}
@@ -222,11 +242,12 @@ export function StudioClient({ detail }: StudioClientProps) {
   const router = useRouter();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   // UI State
-  const [activeDrawer, setActiveDrawer] = useState<string | null>('locks');
+  const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'info' | 'error' } | null>(null);
   const [chrome, setChrome] = useState(true);
   const [activePhaseId, setActivePhaseId] = useState('core-1c');
+  const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
 
@@ -671,7 +692,14 @@ export function StudioClient({ detail }: StudioClientProps) {
           <Lock size={16} />
         </button>
         <div className="tls-status-dot" />
-        <button className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white">
+        <button
+          className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white"
+          onClick={() => {
+            setChrome(false);
+            setActiveDrawer(null);
+          }}
+          title="Clear screen"
+        >
           <Maximize size={16} />
         </button>
       </div>
@@ -841,7 +869,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   );
 
   return (
-    <div className={`tls-shell ${chrome ? 'tls-shell--chrome' : 'tls-shell--clean'} ${chrome && activeDrawer ? 'tls-shell--drawer-open' : ''}`}>
+    <div className={`tls-shell ${chrome ? 'tls-shell--chrome' : 'tls-shell--clean'} ${activeDrawer ? 'tls-shell--drawer-open' : ''}`}>
       <input type="file" ref={uploadInputRef} style={{ display: 'none' }} accept="image/*" onChange={onFileChange} />
 
       {/* CANVAS STAGE */}
@@ -864,9 +892,7 @@ export function StudioClient({ detail }: StudioClientProps) {
 
           <div className="absolute inset-0 flex items-center justify-center">
             {displayAsset?.blob_url ? (
-              <>
-                <img src={displayAsset.blob_url} className={`w-full h-full object-contain ${operation === 'Mockup' ? '' : 'mix-blend-multiply opacity-90 p-12'}`} alt="Design" />
-              </>
+              <img src={displayAsset.blob_url} className={`w-full h-full object-contain ${operation === 'Mockup' ? '' : 'mix-blend-multiply opacity-90 p-12'}`} alt="Design" />
             ) : (
               <div className="flex flex-col items-center justify-center text-black/10 pointer-events-none">
                 <Upload size={32} strokeWidth={1.5} className="mb-4" />
@@ -877,19 +903,19 @@ export function StudioClient({ detail }: StudioClientProps) {
         </section>
       </main>
 
+      <StudioCommandDock
+        activeDrawer={activeDrawer}
+        setActiveDrawer={setActiveDrawer}
+        activePhase={activePhaseId}
+        runPhaseAction={handleRun}
+        chrome={chrome}
+        setChrome={setChrome}
+        setShowQuickMenu={setShowQuickMenu}
+      />
+
       {chrome && (
         <>
           {renderTopBar()}
-
-          <StudioCommandDock
-            activeDrawer={activeDrawer}
-            setActiveDrawer={setActiveDrawer}
-            activePhase={activePhaseId}
-            runPhaseAction={handleRun}
-            chrome={chrome}
-            setChrome={setChrome}
-          />
-
           {activeDrawer === 'locks' && renderLocksDrawer()}
           {activeDrawer === 'layers' && renderLayersDrawer()}
           {activeDrawer === 'refs' && renderRefsDrawer()}
@@ -964,6 +990,34 @@ export function StudioClient({ detail }: StudioClientProps) {
             </div>
           )}
         </>
+      )}
+
+      {/* QUICK MENU OVERLAY */}
+      {showQuickMenu && (
+        <div className="absolute inset-0 z-[150] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/64 backdrop-blur-sm" onClick={() => setShowQuickMenu(false)} />
+          <div className="relative w-[320px] h-[320px] animate-in zoom-in duration-300">
+            <div onClick={() => setShowQuickMenu(false)} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full border border-white/20 bg-black/80 backdrop-blur-xl flex items-center justify-center cursor-pointer hover:bg-white/10 transition-all shadow-2xl z-10">
+              <X size={20} className="text-white/40" />
+            </div>
+            <RadialNode label="Run Check" icon={<Play size={14}/>} angle={-90} radius={110} primary onClick={() => { handleRun(); setShowQuickMenu(false); }} />
+            <RadialNode label="Locks" icon={<Lock size={14}/>} angle={-30} radius={110} onClick={() => { setActiveDrawer('locks'); setShowQuickMenu(false); }} />
+            <RadialNode label="Layers" icon={<Layers size={14}/>} angle={30} radius={110} onClick={() => { setActiveDrawer('layers'); setShowQuickMenu(false); }} />
+            <RadialNode label="References" icon={<LayoutGrid size={14}/>} angle={90} radius={110} onClick={() => { setActiveDrawer('refs'); setShowQuickMenu(false); }} />
+            <RadialNode label="Export" icon={<Download size={14}/>} angle={150} radius={110} onClick={() => { handleSaveToDevice('png'); setShowQuickMenu(false); }} />
+            <RadialNode label="Status" icon={<Check size={14}/>} angle={210} radius={110} onClick={() => setShowQuickMenu(false)} />
+          </div>
+        </div>
+      )}
+
+      {!chrome && (
+        <button 
+          onClick={() => setChrome(true)} 
+          className="absolute top-4 right-4 z-50 grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-black/50 text-white/70 backdrop-blur-2xl hover:bg-white hover:text-black transition-all shadow-2xl"
+          title="Show UI"
+        >
+          <Maximize size={20} />
+        </button>
       )}
 
       {/* TOASTS */}
