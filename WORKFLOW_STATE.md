@@ -13,7 +13,7 @@
 - [x] **Build Stability**: Fixed CSS syntax error in `app/globals.css` that caused Vercel build failures.
 - [x] **Remote Sync**: Successfully committed and force-pushed the configured codebase to `vlad40000/Artlock:main`.
 - [x] **Tailwind v4 Build Fix**: Resolved CSS parser crash by removing `source(none)` and implementing `@tailwindcss/postcss` configuration.
-- [x] **UI/UX Refinement**: Replaced the radial menu and "Right Edge Dock" with a streamlined **Left Command Dock** rail. This rail handles drawer toggles, phase actions, and UI visibility (Chrome) without covering the artwork.
+- [x] **UI/UX Refinement**: Unblocked the studio flow by implementing a clickable **Phase Track** in the Top Bar, allowing artists to move freely between states (CORE-0 to TAT-5). Added a functional **Refine** button powered by Gemini to optimize artist instructions.
 
 ## Current State
 - **Architecture**: Single-screen, canvas-first Studio. Radial-menu-driven operations.
