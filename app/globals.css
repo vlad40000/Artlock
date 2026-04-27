@@ -827,75 +827,163 @@
     z-index: 50;
   }
 
-  /* ─── Radial Quick Menu ─────────────────────────────── */
-  .tls-radial-scrim {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    background: rgba(0, 0, 0, 0.48);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
+  /* ─── Radial Quick Menu: RIGHT EDGE COMMAND DOCK ─────── */
   .tls-radial-ring {
     position: absolute;
-    left: 50%;
     top: 50%;
-    width: 260px;
-    height: 260px;
-    transform: translate(-50%, -50%);
-    border-radius: 999px;
-    border: 1px solid var(--tls-border-soft);
+    right: 28px;
+    left: auto;
+    width: auto;
+    height: auto;
+    transform: translateY(-50%);
+    z-index: 80;
+
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+
+    pointer-events: none;
   }
-  .tls-radial-center {
+
+  .tls-radial-ring::before {
+    content: "";
     position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 52px;
-    height: 52px;
-    transform: translate(-50%, -50%);
+    top: -14px;
+    right: -10px;
+    bottom: -14px;
+    width: 64px;
     border-radius: 999px;
-    background: white;
+    background: rgba(8, 8, 8, 0.58);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 24px 70px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    pointer-events: none;
+  }
+
+  .tls-radial-center,
+  .tls-radial-item {
+    pointer-events: auto;
+    position: relative !important;
+    transform: none !important;
+    inset: auto !important;
+  }
+
+  .tls-radial-center {
+    order: -10;
+
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+
     display: grid;
     place-items: center;
+
+    background: rgba(245, 245, 238, 0.96);
+    color: #050505;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+
     cursor: pointer;
-    z-index: 82;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
-  .tls-radial-center:hover {
-    transform: translate(-50%, -50%) scale(1.1);
-  }
+
   .tls-radial-item {
-    position: absolute;
-    top: 50%;
-    left: 50%;
+    width: 44px;
+    min-width: 44px;
     height: 44px;
-    padding: 0 18px;
-    border-radius: 12px;
-    background: rgba(0, 0, 0, 0.80);
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    color: rgba(255, 255, 255, 0.92);
+    padding: 0;
+
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    font-weight: 900;
+    justify-content: center;
+    gap: 0;
+
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+
+    background: rgba(12, 12, 12, 0.88);
+    color: rgba(255, 255, 255, 0.88);
+
+    font-size: 10px;
+    font-weight: 800;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
     white-space: nowrap;
+
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+
+    overflow: hidden;
     cursor: pointer;
-    z-index: 82;
-    transition: background 0.15s, color 0.15s, transform 0.15s;
+
+    transition:
+      width 160ms ease,
+      min-width 160ms ease,
+      padding 160ms ease,
+      background 160ms ease,
+      color 160ms ease,
+      border-color 160ms ease,
+      transform 160ms ease;
   }
+
+  .tls-radial-item svg {
+    flex: 0 0 auto;
+  }
+
+  .tls-radial-item span {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+      max-width 160ms ease,
+      opacity 120ms ease;
+  }
+
+  .tls-radial-ring:hover .tls-radial-item,
+  .tls-radial-ring:focus-within .tls-radial-item,
+  .tls-radial-ring.is-open .tls-radial-item {
+    width: auto;
+    min-width: 148px;
+    padding: 0 15px;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .tls-radial-ring:hover .tls-radial-item span,
+  .tls-radial-ring:focus-within .tls-radial-item span,
+  .tls-radial-ring.is-open .tls-radial-item span {
+    max-width: 130px;
+    opacity: 1;
+  }
+
   .tls-radial-item:hover {
-    background: rgba(0, 0, 0, 0.92);
-    border-color: rgba(255, 255, 255, 0.18);
-    color: white;
+    background: rgba(24, 24, 24, 0.96);
+    border-color: rgba(255, 255, 255, 0.16);
+    transform: translateX(-3px) !important;
   }
+
   .tls-radial-item.active {
-    background: var(--tls-amber);
-    color: #211500;
-    border-color: transparent;
+    background: #f4b51c;
+    color: #111;
+    border-color: rgba(255, 214, 88, 0.9);
+    box-shadow:
+      0 16px 36px rgba(244, 181, 28, 0.22),
+      0 12px 30px rgba(0, 0, 0, 0.35);
+  }
+
+  .tls-radial-item.active:hover {
+    background: #ffc42b;
+  }
+
+  /* Make Run Delta feel like the primary command */
+  .tls-radial-item:first-of-type {
+    background: rgba(255, 255, 255, 0.92);
+    color: #080808;
+    border-color: rgba(255, 255, 255, 0.32);
   }
 
   .tls-radial-item:focus-visible,

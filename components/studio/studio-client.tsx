@@ -815,20 +815,20 @@ export function StudioClient({ detail }: StudioClientProps) {
         </>
       )}
 
-      {/* QUICK MENU */}
+      {/* QUICK MENU: RIGHT EDGE COMMAND DOCK */}
       {quickMenuOpen && (
         <div className="tls-radial-scrim" onClick={() => setQuickMenuOpen(false)}>
           <div className="tls-radial-ring" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setQuickMenuOpen(false)} className="tls-radial-center">
-              <X size={24} className="text-black" />
+              <Wand2 size={20} className="text-black" />
             </button>
             {[
-              { label: "Run Delta", icon: <Activity size={14} />, pos: "translate(-50%, -130px)", action: handleRun, active: false },
-              { label: "Sys Locks", icon: <Lock size={14} />, pos: "translate(80px, -50%)", action: () => setActiveDrawer('locks'), active: activeDrawer === 'locks' },
-              { label: "Layers", icon: <History size={14} />, pos: "translate(60px, 60px)", action: () => setActiveDrawer('layers'), active: activeDrawer === 'layers' },
-              { label: "Export", icon: <Download size={14} />, pos: "translate(-50%, 80px)", action: () => handleSaveToDevice('png'), active: false },
-              { label: "Refs Board", icon: <Layers size={14} />, pos: "translate(-160px, 60px)", action: () => setActiveDrawer('refs'), active: activeDrawer === 'refs' },
-              { label: "Status", icon: <Activity size={14} />, pos: "translate(-180px, -50%)", action: () => {}, active: true },
+              { label: "Run Check", icon: <Activity size={14} />, action: handleRun, active: false },
+              { label: "Locks", icon: <Lock size={14} />, action: () => setActiveDrawer('locks'), active: activeDrawer === 'locks' },
+              { label: "References", icon: <LayoutGrid size={14} />, action: () => setActiveDrawer('refs'), active: activeDrawer === 'refs' },
+              { label: "Layers", icon: <History size={14} />, action: () => setActiveDrawer('layers'), active: activeDrawer === 'layers' },
+              { label: "Status", icon: <ShieldCheck size={14} />, action: () => {}, active: true },
+              { label: "Export", icon: <Download size={14} />, action: () => handleSaveToDevice('png'), active: false },
             ].map((a) => (
               <button
                 key={a.label}
@@ -837,7 +837,6 @@ export function StudioClient({ detail }: StudioClientProps) {
                   setQuickMenuOpen(false);
                 }}
                 className={`tls-radial-item ${a.active ? 'active' : ''}`}
-                style={{ transform: `${a.pos} ${a.active ? 'scale(1.06)' : ''}` }}
               >
                 {a.icon}
                 <span>{a.label}</span>
