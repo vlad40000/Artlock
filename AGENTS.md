@@ -90,6 +90,9 @@ Every implementation plan must include:
 
 One scoped patch per pass. A patch may touch multiple files only when those files are required by one acceptance criterion.
 
+## Canvas gesture rule
+The Procreate-style interaction contract lives in `.agents/rules/PROCREATE_TOUCH_CONTRACT.md`. Any Studio shell, drawing surface, brush engine, drawer, or quick-menu change must preserve that contract. Canvas gestures are viewport/tool commands only unless explicitly routed through an undoable layer/edit operation.
+
 ## Non-negotiables
 - Do not rebuild from scratch.
 - Do not remove working routes unless replacing them with a tested equivalent.

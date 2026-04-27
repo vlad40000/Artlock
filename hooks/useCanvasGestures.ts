@@ -1,20 +1,26 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
+import type { RefObject } from 'react';
 
 /**
- * Procreate-mapped touch gesture controller for the workspace canvas.
+ * Procreate-mapped touch gesture controller for the Studio canvas shell.
  *
  * Gesture map:
- * - 1-finger drag       → no-op (reserved for mask painting)
- * - 2-finger pinch      → zoom (min 0.5, max 5)
- * - 2-finger drag       → pan
  * - 2-finger tap        → undo
  * - 3-finger tap        → redo
- * - Long press (500ms)  → radial menu
- * - Double tap           → reset zoom/pan to 1:1
- * - Scroll wheel         → zoom (desktop)
- * - Middle-click drag    → pan (desktop)
+ * - 3-finger swipe down → copy/paste menu
+ * - 3-finger scrub      → clear current layer request
+ * - 4-finger tap        → full-screen canvas toggle
+ * - pinch               → zoom canvas view
+ * - 2-finger rotate     → rotate canvas view only
+ * - 2-finger flick      → snap canvas view to fit screen
+ * - long press          → color picker / eyedropper
+ * - wheel               → desktop zoom
+ * - middle-click drag   → desktop pan
+ *
+ * The hook only emits named callbacks. Product behavior stays in Studio shell
+ * components so gestures remain testable and do not silently mutate artwork.
  */
 
 interface GestureCallbacks {
@@ -24,19 +30,64 @@ interface GestureCallbacks {
   onRedo: () => void;
   onLongPress: () => void;
   onDoubleTap: () => void;
+  onRotate?: (rotationDegrees: number) => void;
+  onFitToScreen?: () => void;
+  onCopyPasteMenu?: () => void;
+  onClearLayer?: () => void;
+  onToggleFullScreen?: () => void;
 }
 
 interface GestureState {
   scale: number;
   pan: { x: number; y: number };
+  rotation?: number;
+}
+
+type Point = { x: number; y: number };
+
+const TAP_MAX_MS = 280;
+const MOVE_TOLERANCE_PX = 12;
+const LONG_PRESS_MS = 500;
+const TWO_FINGER_FLICK_PX_PER_MS = 0.85;
+const THREE_FINGER_SWIPE_DOWN_PX = 64;
+const THREE_FINGER_SCRUB_PX = 95;
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+}
+
+function clampScale(scale: number) {
+  return Math.min(5, Math.max(0.35, scale));
+}
+
+function touchPoint(touch: Touch): Point {
+  return { x: touch.clientX, y: touch.clientY };
+}
+
+function distance(a: Point, b: Point) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function midpoint(a: Point, b: Point): Point {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function angleBetween(a: Point, b: Point) {
+  return Math.atan2(b.y - a.y, b.x - a.x) * (180 / Math.PI);
+}
+
+function centroid(touches: TouchList): Point {
+  const pts = Array.from(touches).map(touchPoint);
+  const total = pts.reduce((acc, pt) => ({ x: acc.x + pt.x, y: acc.y + pt.y }), { x: 0, y: 0 });
+  return { x: total.x / pts.length, y: total.y / pts.length };
 }
 
 export function useCanvasGestures(
-  containerRef: React.RefObject<HTMLDivElement | null>,
+  containerRef: RefObject<HTMLElement | null>,
   state: GestureState,
   callbacks: GestureCallbacks,
 ) {
-  // Stable refs for current values to avoid re-subscribing listeners
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -47,42 +98,33 @@ export function useCanvasGestures(
     const el = containerRef.current;
     if (!el) return () => {};
 
-    // --- Touch gesture state ---
-    let pinchStartDist = 0;
-    let pinchStartScale = 1;
-    let panAnchor = { x: 0, y: 0 };
     let touchCount = 0;
     let touchStartTime = 0;
-    let moved = false;
+    let touchStartCentroid: Point | null = null;
+    let lastCentroid: Point | null = null;
+    let lastMoveTime = 0;
+    let movedBeyondTap = false;
 
-    // --- Long press state ---
+    let pinchStartDist = 0;
+    let pinchStartScale = 1;
+    let panAnchor: Point = { x: 0, y: 0 };
+    let rotateStartAngle = 0;
+    let rotateStartRotation = 0;
+
+    let threeFingerMinX = 0;
+    let threeFingerMaxX = 0;
+    let threeFingerMaxY = 0;
+
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
     let longPressPointerId: number | null = null;
     let longPressFired = false;
-
-    // --- Double tap state ---
     let lastTapTime = 0;
 
-    // --- Desktop middle-click pan state ---
     let middleDragging = false;
-    let middleStart = { x: 0, y: 0 };
-    let middlePanStart = { x: 0, y: 0 };
+    let middleStart: Point = { x: 0, y: 0 };
+    let middlePanStart: Point = { x: 0, y: 0 };
 
-    function dist(touches: TouchList) {
-      return Math.hypot(
-        touches[0].clientX - touches[1].clientX,
-        touches[0].clientY - touches[1].clientY,
-      );
-    }
-
-    function mid(touches: TouchList) {
-      return {
-        x: (touches[0].clientX + touches[1].clientX) / 2,
-        y: (touches[0].clientY + touches[1].clientY) / 2,
-      };
-    }
-
-    function clearLP() {
+    function clearLongPress() {
       if (longPressTimer) {
         clearTimeout(longPressTimer);
         longPressTimer = null;
@@ -90,40 +132,53 @@ export function useCanvasGestures(
       longPressPointerId = null;
     }
 
-    function clampScale(s: number) {
-      return Math.min(5, Math.max(0.5, s));
+    function resetTouchTracking(e: TouchEvent) {
+      touchCount = e.touches.length;
+      touchStartTime = Date.now();
+      touchStartCentroid = e.touches.length ? centroid(e.touches) : null;
+      lastCentroid = touchStartCentroid;
+      lastMoveTime = touchStartTime;
+      movedBeyondTap = false;
+
+      if (touchStartCentroid) {
+        threeFingerMinX = touchStartCentroid.x;
+        threeFingerMaxX = touchStartCentroid.x;
+        threeFingerMaxY = touchStartCentroid.y;
+      }
     }
 
-    // --- Pointer (long press) ---
     function onPointerDown(e: PointerEvent) {
+      if (isEditableTarget(e.target)) return;
       if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-      clearLP();
+      clearLongPress();
       longPressFired = false;
       longPressPointerId = e.pointerId;
       longPressTimer = setTimeout(() => {
         longPressFired = true;
         callbacksRef.current.onLongPress();
-      }, 500);
+      }, LONG_PRESS_MS);
     }
 
     function onPointerMove(e: PointerEvent) {
-      if (e.pointerId === longPressPointerId) clearLP();
+      if (e.pointerId === longPressPointerId) clearLongPress();
     }
 
     function onPointerUp(e: PointerEvent) {
-      if (e.pointerId === longPressPointerId) clearLP();
+      if (e.pointerId === longPressPointerId) clearLongPress();
     }
 
-    // --- Touch ---
     function onTouchStart(e: TouchEvent) {
-      moved = false;
-      touchCount = e.touches.length;
-      touchStartTime = Date.now();
+      if (isEditableTarget(e.target)) return;
+      resetTouchTracking(e);
 
       if (e.touches.length === 2) {
-        pinchStartDist = dist(e.touches);
+        const p0 = touchPoint(e.touches[0]);
+        const p1 = touchPoint(e.touches[1]);
+        pinchStartDist = distance(p0, p1);
         pinchStartScale = stateRef.current.scale;
-        const m = mid(e.touches);
+        rotateStartAngle = angleBetween(p0, p1);
+        rotateStartRotation = stateRef.current.rotation ?? 0;
+        const m = midpoint(p0, p1);
         panAnchor = {
           x: m.x - stateRef.current.pan.x,
           y: m.y - stateRef.current.pan.y,
@@ -132,46 +187,102 @@ export function useCanvasGestures(
     }
 
     function onTouchMove(e: TouchEvent) {
-      moved = true;
-      clearLP();
+      if (isEditableTarget(e.target)) return;
+      clearLongPress();
+      if (!touchStartCentroid || e.touches.length === 0) return;
+
+      const now = Date.now();
+      const currentCentroid = centroid(e.touches);
+      const totalMove = distance(touchStartCentroid, currentCentroid);
+      if (totalMove > MOVE_TOLERANCE_PX) movedBeyondTap = true;
 
       if (e.touches.length === 2) {
         e.preventDefault();
-        const d = dist(e.touches);
-        const m = mid(e.touches);
+        const p0 = touchPoint(e.touches[0]);
+        const p1 = touchPoint(e.touches[1]);
+        const d = distance(p0, p1);
+        const m = midpoint(p0, p1);
         const nextScale = pinchStartDist > 0
           ? clampScale((d / pinchStartDist) * pinchStartScale)
           : stateRef.current.scale;
-
+        
         callbacksRef.current.onZoom(nextScale);
         callbacksRef.current.onPan({
           x: m.x - panAnchor.x,
           y: m.y - panAnchor.y,
         });
+
+        if (callbacksRef.current.onRotate) {
+          callbacksRef.current.onRotate(rotateStartRotation + angleBetween(p0, p1) - rotateStartAngle);
+        }
       }
+
+      if (e.touches.length === 3) {
+        e.preventDefault();
+        threeFingerMinX = Math.min(threeFingerMinX, currentCentroid.x);
+        threeFingerMaxX = Math.max(threeFingerMaxX, currentCentroid.x);
+        threeFingerMaxY = Math.max(threeFingerMaxY, currentCentroid.y);
+      }
+
+      lastCentroid = currentCentroid;
+      lastMoveTime = now;
     }
 
     function onTouchEnd(e: TouchEvent) {
-      clearLP();
-      const duration = Date.now() - touchStartTime;
+      clearLongPress();
+      if (e.touches.length > 0) return;
 
-      // Ignore if moved, long duration, or long press already fired
-      if (moved || duration > 280 || longPressFired) return;
+      const endedAt = Date.now();
+      const duration = endedAt - touchStartTime;
+      const start = touchStartCentroid;
+      const last = lastCentroid;
+      if (!start || !last || longPressFired) return;
 
-      // 2-finger tap → undo
-      if (touchCount === 2 && e.touches.length === 0) {
-        callbacksRef.current.onUndo();
+      const dx = last.x - start.x;
+      const dy = last.y - start.y;
+      const totalMove = distance(start, last);
+      const quickTap = duration <= TAP_MAX_MS && totalMove <= MOVE_TOLERANCE_PX;
+
+      if (touchCount === 4 && quickTap) {
+        callbacksRef.current.onToggleFullScreen?.();
         return;
       }
 
-      // 3-finger tap → redo
-      if (touchCount === 3 && e.touches.length === 0) {
-        callbacksRef.current.onRedo();
-        return;
+      if (touchCount === 3) {
+        const horizontalTravel = threeFingerMaxX - threeFingerMinX;
+        const verticalTravel = threeFingerMaxY - start.y;
+
+        if (quickTap) {
+          callbacksRef.current.onRedo();
+          return;
+        }
+
+        if (verticalTravel >= THREE_FINGER_SWIPE_DOWN_PX && Math.abs(dx) < verticalTravel * 0.75) {
+          callbacksRef.current.onCopyPasteMenu?.();
+          return;
+        }
+
+        if (horizontalTravel >= THREE_FINGER_SCRUB_PX && Math.abs(dy) < 52) {
+          callbacksRef.current.onClearLayer?.();
+          return;
+        }
       }
 
-      // 1-finger tap → check double tap → reset zoom/pan
-      if (touchCount === 1 && e.touches.length === 0) {
+      if (touchCount === 2) {
+        if (quickTap) {
+          callbacksRef.current.onUndo();
+          return;
+        }
+
+        const elapsedSinceLastMove = Math.max(1, endedAt - lastMoveTime);
+        const velocity = totalMove / Math.max(1, duration || elapsedSinceLastMove);
+        if (velocity >= TWO_FINGER_FLICK_PX_PER_MS || totalMove > 180) {
+          callbacksRef.current.onFitToScreen?.();
+          return;
+        }
+      }
+
+      if (touchCount === 1 && quickTap) {
         const now = Date.now();
         if (now - lastTapTime < 300) {
           callbacksRef.current.onDoubleTap();
@@ -182,68 +293,62 @@ export function useCanvasGestures(
       }
     }
 
-    // --- Desktop: scroll wheel zoom ---
     function onWheel(e: WheelEvent) {
+      if (isEditableTarget(e.target)) return;
       e.preventDefault();
-
       const zoomFactor = e.deltaY > 0 ? 0.92 : 1.08;
-      const next = clampScale(stateRef.current.scale * zoomFactor);
-      callbacksRef.current.onZoom(next);
+      callbacksRef.current.onZoom(clampScale(stateRef.current.scale * zoomFactor));
     }
 
-    // --- Desktop: middle-click pan ---
     function onMouseDown(e: MouseEvent) {
-      if (e.button !== 1) return; // middle click only
+      if (isEditableTarget(e.target)) return;
+      if (e.button !== 1) return;
       e.preventDefault();
       middleDragging = true;
       middleStart = { x: e.clientX, y: e.clientY };
-      middlePanStart = { ...stateRef.current.pan };
+      middlePanStart = { x: stateRef.current.pan.x, y: stateRef.current.pan.y };
     }
 
     function onMouseMove(e: MouseEvent) {
-      if (!middleDragging) return;
-      callbacksRef.current.onPan({
-        x: middlePanStart.x + (e.clientX - middleStart.x),
-        y: middlePanStart.y + (e.clientY - middleStart.y),
-      });
+      if (middleDragging) {
+        callbacksRef.current.onPan({
+          x: middlePanStart.x + (e.clientX - middleStart.x),
+          y: middlePanStart.y + (e.clientY - middleStart.y),
+        });
+      }
     }
 
     function onMouseUp(e: MouseEvent) {
       if (e.button === 1) middleDragging = false;
     }
 
-    // --- Keyboard shortcuts ---
     function onKeyDown(e: KeyboardEvent) {
-      // Cmd/Ctrl + 0 → reset zoom
+      if (isEditableTarget(e.target)) return;
+
       if ((e.metaKey || e.ctrlKey) && e.key === '0') {
         e.preventDefault();
         callbacksRef.current.onDoubleTap();
         return;
       }
 
-      // Cmd/Ctrl + = → zoom in
       if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
         callbacksRef.current.onZoom(clampScale(stateRef.current.scale * 1.15));
         return;
       }
 
-      // Cmd/Ctrl + - → zoom out
       if ((e.metaKey || e.ctrlKey) && e.key === '-') {
         e.preventDefault();
         callbacksRef.current.onZoom(clampScale(stateRef.current.scale * 0.85));
-        return;
       }
     }
 
-    // --- Subscribe ---
     el.addEventListener('pointerdown', onPointerDown);
     el.addEventListener('pointermove', onPointerMove);
     el.addEventListener('pointerup', onPointerUp);
-    el.addEventListener('pointercancel', onPointerUp);
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('touchend', onTouchEnd);
     el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
@@ -253,11 +358,10 @@ export function useCanvasGestures(
     el.style.touchAction = 'none';
 
     return () => {
-      clearLP();
+      clearLongPress();
       el.removeEventListener('pointerdown', onPointerDown);
       el.removeEventListener('pointermove', onPointerMove);
       el.removeEventListener('pointerup', onPointerUp);
-      el.removeEventListener('pointercancel', onPointerUp);
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
@@ -269,7 +373,5 @@ export function useCanvasGestures(
     };
   }, [containerRef]);
 
-  useEffect(() => {
-    return attach();
-  }, [attach]);
+  useEffect(() => attach(), [attach]);
 }

@@ -35,6 +35,7 @@ import { derivePresetId, varianceToIntensity } from '@/lib/ai/generation-profile
 import { useStudioBootstrap } from './useStudioBootstrap';
 import { useStudioVoice } from './voice/use-studio-voice';
 import type { VoiceCommand } from './voice/voice-command-parser';
+import { useCanvasGestures } from '@/hooks/useCanvasGestures';
 import { Operation, operationAction } from './studio-sidebar';
 import type { TattooQAReport } from '@/lib/ai/prompt-contracts/tattoo-qa';
 
@@ -94,16 +95,15 @@ function IconButton({ children, active, onClick, title }: { children: React.Reac
 }
 
 const PHASES = [
-  { id: "core-0", code: "CORE-0", label: "Reference Board", kind: "intake", op: 'Extract' },
-  { id: "core-1a", code: "CORE-1A", label: "Extract Locks", kind: "read", op: 'Extract' },
-  { id: "core-1b", code: "CORE-1B", label: "Create Base v1", kind: "build", op: 'Creative' },
-  { id: "core-1c", code: "CORE-1C", label: "Surgical Edit", kind: "edit", op: 'Surgical' },
-  { id: "core-1d", code: "CORE-1D", label: "Localized Edit", kind: "edit", op: 'Surgical' },
-  { id: "core-1e", code: "CORE-1E", label: "Creative Edit", kind: "edit", op: 'Creative' },
-  { id: "tat-2", code: "TAT-2", label: "Placement Fit", kind: "tattoo", op: 'Mockup' },
-  { id: "tat-3", code: "TAT-3", label: "Variant Sheet", kind: "tattoo", op: 'Variant' },
-  { id: "tat-4", code: "TAT-4", label: "Stencil", kind: "export", op: 'Stencil' },
-  { id: "tat-5", code: "TAT-5", label: "Skin Mockup", kind: "mockup", op: 'Mockup' },
+  { id: "core-0", code: "REF", label: "Inspiration", kind: "intake", op: "Build" },
+  { id: "core-1a", code: "AUD", label: "Audit Source", kind: "read", op: "Build" },
+  { id: "core-1b", code: "BASE", label: "Draft Design", kind: "build", op: "Build" },
+  { id: "core-1c", code: "EDIT", label: "Surgical Touch", kind: "edit", op: "Edit" },
+  { id: "core-1d", code: "PVT", label: "Creative Pivot", kind: "delta", op: "Delta" },
+  { id: "tat-2", code: "TURN", label: "Turnaround", kind: "edit", op: "Edit" },
+  { id: "tat-3", code: "STNC", label: "Stencil", kind: "build", op: "Stencil" },
+  { id: "tat-4", code: "VAR", label: "Variants", kind: "build", op: "Variants" },
+  { id: "tat-5", code: "MOCK", label: "Mockup", kind: "mock", op: "Mockup" },
 ];
 
 function RadialNode({ label, icon, angle, radius, primary, onClick }: { label: string; icon: React.ReactNode; angle: number; radius: number; primary?: boolean; onClick: () => void }) {
@@ -111,11 +111,20 @@ function RadialNode({ label, icon, angle, radius, primary, onClick }: { label: s
   const x = Math.cos(rad) * radius;
   const y = Math.sin(rad) * radius;
   return (
-    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))` }}>
-      <button onClick={onClick} className={`w-28 h-11 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all shadow-2xl ${primary ? 'bg-tls-amber text-black hover:bg-white hover:scale-110' : 'bg-[#2a2a2c]/90 border border-white/10 text-white/80 hover:bg-white/10 backdrop-blur-md'}`}>
-        {icon}{label}
-      </button>
-    </div>
+    <button
+      onClick={onClick}
+      style={{
+        transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
+      }}
+      className={`absolute left-1/2 top-1/2 flex items-center justify-center gap-2 w-32 h-11 px-4 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all shadow-2xl z-20 ${
+        primary
+          ? "bg-tls-amber border-tls-amber text-black hover:bg-white hover:scale-110"
+          : "bg-[#2a2a2c]/90 border-white/10 text-white/80 hover:bg-white/10 backdrop-blur-md"
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -127,6 +136,10 @@ function StudioCommandDock({
   chrome,
   setChrome,
   setShowQuickMenu,
+  dockPosition,
+  setDockPosition,
+  dockItems,
+  setDockItems,
 }: {
   activeDrawer: string | null;
   setActiveDrawer: React.Dispatch<React.SetStateAction<string | null>>;
@@ -135,8 +148,23 @@ function StudioCommandDock({
   chrome: boolean;
   setChrome: React.Dispatch<React.SetStateAction<boolean>>;
   setShowQuickMenu: React.Dispatch<React.SetStateAction<boolean>>;
+  dockPosition: { x: number; y: number };
+  setDockPosition: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
+  dockItems: string[];
+  setDockItems: React.Dispatch<React.SetStateAction<string[]>>;
 }) {
+  const [isConfiguring, setIsConfiguring] = useState(false);
   const phase = PHASES.find((item) => item.id === activePhase) || PHASES[0];
+
+  const ALL_ACTIONS: Record<string, { label: string; icon: string }> = {
+    menu: { label: "Quick Menu", icon: "▦" },
+    locks: { label: "DNA Locks", icon: "▣" },
+    refs: { label: "Gallery", icon: "▧" },
+    layers: { label: "Layers", icon: "▤" },
+    qa: { label: "Audit Design", icon: "◉" },
+    export: { label: "Export PNG", icon: "⤓" },
+    relock: { label: "Sync Base", icon: "🔃" },
+  };
 
   const canRun =
     phase.kind !== "intake" &&
@@ -146,60 +174,107 @@ function StudioCommandDock({
     setActiveDrawer((prev) => (prev === drawer ? null : drawer));
   };
 
-  const items = [
-    {
-      id: "menu",
-      label: "Quick Menu",
-      icon: "▦",
-      active: false,
-      onClick: () => setShowQuickMenu(true),
-    },
-    {
-      id: "locks",
-      label: "Locks",
-      icon: "▣",
-      active: activeDrawer === "locks",
-      onClick: () => toggleDrawer("locks"),
-    },
-    {
-      id: "refs",
-      label: "References",
-      icon: "▧",
-      active: activeDrawer === "refs",
-      onClick: () => toggleDrawer("refs"),
-    },
-    {
-      id: "layers",
-      label: "Layers",
-      icon: "▤",
-      active: activeDrawer === "layers",
-      onClick: () => toggleDrawer("layers"),
-    },
-  ];
+  const handleActionClick = (id: string) => {
+    if (isConfiguring) return; // handled by swap logic
+    switch(id) {
+      case 'menu': setShowQuickMenu(true); break;
+      case 'locks': toggleDrawer('locks'); break;
+      case 'refs': toggleDrawer('refs'); break;
+      case 'layers': toggleDrawer('layers'); break;
+      default: toggleDrawer(id);
+    }
+  };
+
+  const swapAction = (index: number, newActionId: string) => {
+    const next = [...dockItems];
+    next[index] = newActionId;
+    setDockItems(next);
+  };
+
+  // Draggable logic
+  const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: dockPosition.x,
+      initialY: dockPosition.y,
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const onMouseMove = useCallback((e: MouseEvent) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    setDockPosition({
+      x: dragRef.current.initialX + dx,
+      y: dragRef.current.initialY + dy,
+    });
+  }, [setDockPosition]);
+
+  const onMouseUp = useCallback(() => {
+    dragRef.current = null;
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  }, [onMouseMove]);
 
   return (
-    <aside className="absolute left-4 top-1/2 z-50 flex -translate-y-1/2 flex-col items-center gap-2 rounded-full border border-white/10 bg-black/42 p-2 shadow-2xl backdrop-blur-2xl">
-      <div className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-[9px] font-black uppercase tracking-[0.08em] text-white/45" title={`Current phase: ${phase.id}`}>
+    <aside 
+      style={{ left: dockPosition.x, top: dockPosition.y, transform: 'translateY(-50%)' }}
+      className="absolute z-50 flex flex-col items-center gap-2 rounded-full border border-white/10 bg-black/42 p-2 shadow-2xl backdrop-blur-2xl"
+    >
+      <div 
+        onMouseDown={onMouseDown}
+        className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-[9px] font-black uppercase tracking-[0.08em] text-white/45 cursor-move active:scale-95 transition-transform" 
+        title="Drag to reposition"
+      >
         {phase.code}
       </div>
-      {items.map((item) => (
-        <button
-          key={item.id}
-          title={item.label}
-          onClick={item.onClick}
-          className={`group relative grid h-12 w-12 place-items-center rounded-full border text-sm font-black transition-all active:scale-95 ${
-            item.active
-              ? "border-amber-300 bg-amber-300 text-black shadow-[0_0_28px_rgba(251,191,36,0.28)]"
-              : "border-white/10 bg-white/[0.06] text-white/70 hover:bg-white hover:text-black"
-          }`}
-        >
-          <span>{item.icon}</span>
 
-          <span className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100">
-            {item.label}
-          </span>
-        </button>
-      ))}
+      {dockItems.map((id, index) => {
+        const item = ALL_ACTIONS[id] || ALL_ACTIONS.menu;
+        const isActive = activeDrawer === id;
+
+        return (
+          <div key={`${id}-${index}`} className="relative group">
+            <button
+              title={item.label}
+              onClick={() => handleActionClick(id)}
+              className={`relative grid h-12 w-12 place-items-center rounded-full border text-sm font-black transition-all active:scale-95 ${
+                isActive
+                  ? "border-amber-300 bg-amber-300 text-black shadow-[0_0_28px_rgba(251,191,36,0.28)]"
+                  : "border-white/10 bg-white/[0.06] text-white/70 hover:bg-white hover:text-black"
+              }`}
+            >
+              <span>{item.icon}</span>
+              
+              {!isConfiguring && (
+                <span className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100">
+                  {item.label}
+                </span>
+              )}
+            </button>
+
+            {isConfiguring && (
+              <div className="absolute left-[58px] top-1/2 -translate-y-1/2 flex gap-1 p-1 rounded-xl bg-black/80 border border-white/10 backdrop-blur-xl z-[60] shadow-2xl">
+                {Object.keys(ALL_ACTIONS).map(actionId => (
+                  <button
+                    key={actionId}
+                    onClick={() => swapAction(index, actionId)}
+                    className={`h-8 w-8 rounded-lg grid place-items-center transition-colors ${id === actionId ? 'bg-tls-amber text-black' : 'text-white/40 hover:bg-white/10'}`}
+                    title={ALL_ACTIONS[actionId].label}
+                  >
+                    {ALL_ACTIONS[actionId].icon}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       <div className="my-1 h-px w-8 bg-white/10" />
 
@@ -214,25 +289,17 @@ function StudioCommandDock({
         }`}
       >
         <span>▶</span>
-
         <span className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100">
           {canRun ? "Run" : "Read Only"}
         </span>
       </button>
 
       <button
-        title={chrome ? "Hide UI" : "Show UI"}
-        onClick={() => {
-          setChrome(!chrome);
-          setActiveDrawer(null);
-        }}
-        className="group relative grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-white/[0.06] text-sm font-black text-white/70 transition-all hover:bg-white hover:text-black active:scale-95"
+        title="Configure Dock"
+        onClick={() => setIsConfiguring(!isConfiguring)}
+        className={`grid h-8 w-8 place-items-center rounded-full border text-[10px] transition-all ${isConfiguring ? 'bg-tls-amber border-tls-amber text-black' : 'border-white/5 bg-white/[0.02] text-white/20 hover:text-white'}`}
       >
-        <span>⛶</span>
-
-        <span className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100">
-          {chrome ? "Clear Screen" : "Show UI"}
-        </span>
+        ⚙
       </button>
     </aside>
   );
@@ -241,8 +308,14 @@ function StudioCommandDock({
 export function StudioClient({ detail }: StudioClientProps) {
   const router = useRouter();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const canvasGestureRef = useRef<HTMLElement | null>(null);
+  const [canvasScale, setCanvasScale] = useState(1);
+  const [canvasRotation, setCanvasRotation] = useState(0);
+  const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
+
   // UI State
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
+  const [showLockDetails, setShowLockDetails] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'info' | 'error' } | null>(null);
   const [chrome, setChrome] = useState(true);
@@ -250,6 +323,13 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
+  const [dockPosition, setDockPosition] = useState({ x: 16, y: 400 });
+  const [dockItems, setDockItems] = useState(['menu', 'locks', 'refs', 'layers']);
+
+  const canvasTransformStyle = useMemo<React.CSSProperties>(() => ({
+    transform: `translate(-50%, -50%) translate(${Math.round(canvasPan.x)}px, ${Math.round(canvasPan.y)}px) scale(${canvasScale}) rotate(${canvasRotation}deg)`,
+    transformOrigin: 'center center',
+  }), [canvasPan.x, canvasPan.y, canvasScale, canvasRotation]);
 
   const handleEnhancePrompt = async () => {
     if (!request.trim() || busy) return;
@@ -299,6 +379,49 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [detailLevel, setDetailLevel] = useState(70);
 
   const { bootstrap, isBootstrapping, error: bootstrapError, clearError } = useStudioBootstrap();
+
+  const resetCanvasView = useCallback(() => {
+    setCanvasScale(1);
+    setCanvasPan({ x: 0, y: 0 });
+    setCanvasRotation(0);
+    setStatus('Canvas snapped to fit.');
+  }, []);
+
+  useCanvasGestures(
+    canvasGestureRef,
+    { scale: canvasScale, pan: canvasPan, rotation: canvasRotation },
+    {
+      onZoom: setCanvasScale,
+      onPan: setCanvasPan,
+      onRotate: setCanvasRotation,
+      onUndo: () => {
+        setStatus('Undo gesture received. History stack wiring pending.');
+        setMessage({ text: 'Undo gesture', type: 'info' });
+      },
+      onRedo: () => {
+        setStatus('Redo gesture received. History stack wiring pending.');
+        setMessage({ text: 'Redo gesture', type: 'info' });
+      },
+      onLongPress: () => {
+        setStatus('Color picker gesture received. Eyedropper UI pending.');
+      },
+      onDoubleTap: resetCanvasView,
+      onFitToScreen: resetCanvasView,
+      onCopyPasteMenu: () => {
+        setStatus('Copy/Paste gesture received. Actions panel pending.');
+        setMessage({ text: 'Copy/Paste menu gesture', type: 'info' });
+      },
+      onClearLayer: () => {
+        setStatus('Clear-layer scrub received. Destructive clear is blocked until undo checkpoint wiring exists.');
+        setMessage({ text: 'Clear layer blocked until undo checkpoint exists', type: 'info' });
+      },
+      onToggleFullScreen: () => {
+        setChrome((prev) => !prev);
+        setActiveDrawer(null);
+        setStatus('Full-screen canvas toggled.');
+      },
+    },
+  );
 
   // --- Voice Setup ---
   const handleVoiceCommand = useCallback((command: VoiceCommand) => {
@@ -627,6 +750,19 @@ export function StudioClient({ detail }: StudioClientProps) {
     }
   };
 
+  const runLabel = useMemo(() => {
+    switch (operation) {
+      case 'Extract': return 'Scan Source';
+      case 'Surgical': return 'Apply Touch';
+      case 'Creative': return 'Forge Pivot';
+      case 'Mockup': return 'Project Skin';
+      case 'Variant': return 'Cast Variants';
+      case 'Stencil': return 'Burn Stencil';
+      case 'Turnaround': return 'Rotate View';
+      default: return 'Process';
+    }
+  }, [operation]);
+
   // --- DATA MAPPING ---
   const latestEditRun = detail?.editRuns?.[0];
   const isCompletedEditRun = latestEditRun?.status === 'succeeded' || latestEditRun?.status === 'complete';
@@ -713,15 +849,15 @@ export function StudioClient({ detail }: StudioClientProps) {
         <div className="tls-drawer-header">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h2 className="text-[10px] tracking-[0.2em] text-neutral-400 font-bold uppercase">Active Phase</h2>
-              <h1 className="text-xl font-semibold mt-1">Extract Locks</h1>
+              <h2 className="text-[10px] tracking-[0.2em] text-neutral-400 font-bold uppercase">DNA audit</h2>
+              <h1 className="text-xl font-semibold mt-1">Source Locks</h1>
             </div>
-            <span className="text-[10px] py-1 px-2 bg-green-900/30 text-green-400 border border-green-500/50 rounded-full font-mono">CORE-1A</span>
+            <span className="text-[10px] py-1 px-2 bg-green-900/30 text-green-400 border border-green-500/50 rounded-full font-mono">{activePhaseId.toUpperCase()}</span>
           </div>
 
           <p className="text-[11px] text-neutral-400 leading-relaxed mb-8">
             {operation === 'Extract' 
-              ? 'Read-only extraction. Uses AI to pull lock metadata from the selected reference.'
+              ? 'Reading visual DNA from the reference. These locks guide all future generations.'
               : 'Current design constraints enforced on the next generation run.'}
           </p>
 
@@ -733,14 +869,22 @@ export function StudioClient({ detail }: StudioClientProps) {
           </div>
         </div>
 
-        <div className="tls-drawer-body scrollbar-hide">
+        <div className="tls-drawer-body scrollbar-hide space-y-2">
           {activeLocksList.map((lock) => (
-            <div key={lock.name} className="tls-card-row">
-              <div className="min-w-0">
-                <div className="tls-card-row-title">{lock.name}</div>
-                <div className="tls-card-row-sub truncate">{lock.value || 'Empty'}</div>
+            <div 
+              key={lock.name} 
+              className={`tls-card-row cursor-pointer transition-all ${showLockDetails === lock.name ? 'ring-1 ring-tls-amber bg-white/[0.04]' : 'hover:bg-white/[0.02]'}`}
+              onClick={() => setShowLockDetails(prev => prev === lock.name ? null : lock.name)}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <div className="tls-card-row-title">{lock.name}</div>
+                  <div className={`tls-row-dot ${lock.value ? 'filled' : ''}`} />
+                </div>
+                <div className={`text-[11px] mt-1 transition-all ${showLockDetails === lock.name ? 'text-white/90 whitespace-normal' : 'text-white/40 truncate'}`}>
+                  {lock.value || 'Empty / Undefined'}
+                </div>
               </div>
-              <div className={`tls-row-dot ${lock.value ? 'filled' : ''}`} />
             </div>
           ))}
         </div>
@@ -748,14 +892,9 @@ export function StudioClient({ detail }: StudioClientProps) {
         <button
           disabled={!!busy}
           onClick={handleRun}
-          className="tls-drawer-cta"
+          className="w-full mt-6 py-3 rounded-xl bg-white text-black font-black uppercase tracking-[0.15em] text-[10px] hover:bg-tls-amber transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-            <>
-              <Sparkles size={14} />
-              <span>RUN AI EXTRACTION</span>
-            </>
-          )}
+          {busy ? 'Processing...' : runLabel}
         </button>
       </aside>
     );
@@ -873,7 +1012,7 @@ export function StudioClient({ detail }: StudioClientProps) {
       <input type="file" ref={uploadInputRef} style={{ display: 'none' }} accept="image/*" onChange={onFileChange} />
 
       {/* CANVAS STAGE */}
-      <main className="tls-artboard-frame">
+      <main ref={canvasGestureRef} className="tls-artboard-frame" style={canvasTransformStyle}>
         <section
           onClick={!detail?.referenceAsset ? handleAddReference : undefined}
           className={`tls-artboard ${!detail?.referenceAsset ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
@@ -911,6 +1050,10 @@ export function StudioClient({ detail }: StudioClientProps) {
         chrome={chrome}
         setChrome={setChrome}
         setShowQuickMenu={setShowQuickMenu}
+        dockPosition={dockPosition}
+        setDockPosition={setDockPosition}
+        dockItems={dockItems}
+        setDockItems={setDockItems}
       />
 
       {chrome && (
@@ -958,7 +1101,7 @@ export function StudioClient({ detail }: StudioClientProps) {
               className="tls-run-btn"
             >
               <Activity size={14} />
-              <span>Run</span>
+              <span>{runLabel}</span>
             </button>
           </section>
 
@@ -1000,12 +1143,12 @@ export function StudioClient({ detail }: StudioClientProps) {
             <div onClick={() => setShowQuickMenu(false)} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full border border-white/20 bg-black/80 backdrop-blur-xl flex items-center justify-center cursor-pointer hover:bg-white/10 transition-all shadow-2xl z-10">
               <X size={20} className="text-white/40" />
             </div>
-            <RadialNode label="Run Check" icon={<Play size={14}/>} angle={-90} radius={110} primary onClick={() => { handleRun(); setShowQuickMenu(false); }} />
-            <RadialNode label="Locks" icon={<Lock size={14}/>} angle={-30} radius={110} onClick={() => { setActiveDrawer('locks'); setShowQuickMenu(false); }} />
-            <RadialNode label="Layers" icon={<Layers size={14}/>} angle={30} radius={110} onClick={() => { setActiveDrawer('layers'); setShowQuickMenu(false); }} />
-            <RadialNode label="References" icon={<LayoutGrid size={14}/>} angle={90} radius={110} onClick={() => { setActiveDrawer('refs'); setShowQuickMenu(false); }} />
-            <RadialNode label="Export" icon={<Download size={14}/>} angle={150} radius={110} onClick={() => { handleSaveToDevice('png'); setShowQuickMenu(false); }} />
-            <RadialNode label="Status" icon={<Check size={14}/>} angle={210} radius={110} onClick={() => setShowQuickMenu(false)} />
+            <RadialNode label="Scan DNA" icon={<Play size={14}/>} angle={-90} radius={110} primary onClick={() => { handleRun(); setShowQuickMenu(false); }} />
+            <RadialNode label="DNA Locks" icon={<Lock size={14}/>} angle={-30} radius={110} onClick={() => { setActiveDrawer('locks'); setShowQuickMenu(false); }} />
+            <RadialNode label="Layer Stack" icon={<Layers size={14}/>} angle={30} radius={110} onClick={() => { setActiveDrawer('layers'); setShowQuickMenu(false); }} />
+            <RadialNode label="Inspiration" icon={<LayoutGrid size={14}/>} angle={90} radius={110} onClick={() => { setActiveDrawer('refs'); setShowQuickMenu(false); }} />
+            <RadialNode label="Cast PNG" icon={<Download size={14}/>} angle={150} radius={110} onClick={() => { handleSaveToDevice('png'); setShowQuickMenu(false); }} />
+            <RadialNode label="DNA Audit" icon={<Check size={14}/>} angle={210} radius={110} onClick={() => setShowQuickMenu(false)} />
           </div>
         </div>
       )}
@@ -1013,10 +1156,10 @@ export function StudioClient({ detail }: StudioClientProps) {
       {!chrome && (
         <button 
           onClick={() => setChrome(true)} 
-          className="absolute top-4 right-4 z-50 grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-black/50 text-white/70 backdrop-blur-2xl hover:bg-white hover:text-black transition-all shadow-2xl"
+          className="absolute top-4 right-4 z-[130] grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-black/55 text-white/70 shadow-2xl backdrop-blur-2xl transition hover:bg-white hover:text-black"
           title="Show UI"
         >
-          <Maximize size={20} />
+          <Maximize2 size={20} />
         </button>
       )}
 
