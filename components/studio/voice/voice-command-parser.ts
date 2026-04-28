@@ -16,12 +16,13 @@ export type VoiceCommandType =
   | 'OPEN_DRAWER'
   | 'FILL_REQUEST'
   | 'SET_MASK_TYPE'
+  | 'TOGGLE_MASK'
   | 'BLOCKED_ACTION';
 
 
 export interface VoiceCommand {
   type: VoiceCommandType;
-  value?: string | number | boolean;
+  value?: string | number | boolean | { type: 'include' | 'exclude'; subject?: string };
   message?: string;
 }
 
@@ -161,12 +162,29 @@ export function parseVoiceCommand(transcript: string): VoiceCommand {
     }
   }
 
-  // Mask type: "mask within", "mask outside", "mask exclude"
-  const maskTypeMatch = lower.match(/(?:mask\s+)?(within|inside|outside|exclude|including|including|excluding)/);
-  if (maskTypeMatch) {
+  // Mask type: "mask within", "mask outside", "mask exclude", "mask the [area]"
+  const maskTypeMatch = lower.match(/(?:mask\s+)?(within|inside|outside|exclude|including|excluding|the|this)\s*([a-z0-9\s]+)?/);
+  if (maskTypeMatch && (lower.includes('mask') || ['within', 'outside', 'exclude'].some(k => lower.includes(k)))) {
     const key = maskTypeMatch[1];
-    const type = ['within', 'inside', 'including'].includes(key) ? 'include' : 'exclude';
-    return { type: 'SET_MASK_TYPE', value: type };
+    const subject = maskTypeMatch[2]?.trim();
+    
+    if (['within', 'inside', 'including'].includes(key)) {
+      return { type: 'SET_MASK_TYPE', value: { type: 'include', subject } };
+    }
+    if (['outside', 'exclude', 'excluding'].includes(key)) {
+      return { type: 'SET_MASK_TYPE', value: { type: 'exclude', subject } };
+    }
+    if (subject) {
+      return { type: 'SET_MASK_TYPE', value: { type: 'include', subject } };
+    }
+  }
+
+  // Toggle mask: "show mask", "hide mask", "enable mask"
+  const maskToggleMatch = lower.match(/(?:show|hide|enable|disable|toggle)\s+mask/);
+  if (maskToggleMatch || /mask\s+(?:on|off)/.test(lower)) {
+    const isShow = /show|enable|on|toggle/.test(lower) && !/hide|disable|off/.test(lower);
+    // Note: toggle is treated as show for simplicity in one-way voice commands
+    return { type: 'TOGGLE_MASK', value: isShow };
   }
 
   // Default: treat entire transcript as client request text

@@ -37,12 +37,16 @@ export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProp
     const scaleY = canvas.height / rect.height;
 
     let clientX, clientY;
-    if ('touches' in e) {
+    if ('touches' in e && e.touches.length > 0) {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
+    } else if ('changedTouches' in e && e.changedTouches.length > 0) {
+      clientX = e.changedTouches[0].clientX;
+      clientY = e.changedTouches[0].clientY;
     } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
+      const mouseEvent = e as React.MouseEvent;
+      clientX = mouseEvent.clientX;
+      clientY = mouseEvent.clientY;
     }
 
     return {
@@ -54,7 +58,15 @@ export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProp
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isActive) return;
     setIsDrawing(true);
-    draw(e);
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const { x, y } = getCoordinates(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
   };
 
   const stopDrawing = () => {
@@ -82,15 +94,13 @@ export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProp
     
     if (mode === 'draw') {
       ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = 'white'; // Mask is white on transparent
+      ctx.strokeStyle = 'white'; 
     } else {
       ctx.globalCompositeOperation = 'destination-out';
     }
 
     ctx.lineTo(x, y);
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y);
   };
 
   const handleClear = () => {
@@ -107,23 +117,31 @@ export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProp
   if (!isActive) return null;
 
   return (
-    <div className="absolute inset-0 z-20 cursor-crosshair touch-none overflow-hidden">
+    <div 
+      className="absolute inset-0 z-40 overflow-hidden pointer-events-none"
+      style={{ touchAction: 'none' }}
+    >
       <canvas
         ref={canvasRef}
         width={width}
         height={height}
         onMouseDown={startDrawing}
-        onMouseUp={stopDrawing}
         onMouseMove={draw}
+        onMouseUp={stopDrawing}
+        onMouseLeave={stopDrawing}
         onTouchStart={startDrawing}
-        onTouchEnd={stopDrawing}
         onTouchMove={draw}
-        className="w-full h-full opacity-60"
-        style={{ filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.4))' }}
+        onTouchEnd={stopDrawing}
+        className={`w-full h-full object-contain pointer-events-auto cursor-crosshair opacity-60 transition-opacity ${isActive ? 'opacity-60' : 'opacity-0'}`}
+        style={{ 
+          imageRendering: 'pixelated',
+          // Only allow pointer events if we are in 'draw' or 'erase' mode and isActive
+          pointerEvents: isActive ? 'auto' : 'none'
+        }}
       />
       
       {/* MASK CONTROLS */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-tls-panel-heavy backdrop-blur-tls-32 border border-tls-border px-4 py-2 rounded-2xl shadow-tls-heavy animate-tls-slide-up">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-tls-panel-heavy backdrop-blur-tls-32 border border-tls-border px-4 py-2 rounded-2xl shadow-tls-heavy animate-tls-slide-up pointer-events-auto">
         <button 
           onClick={() => setMode('draw')}
           className={`p-2 rounded-lg transition-colors ${mode === 'draw' ? 'bg-tls-amber text-black' : 'text-white/40 hover:bg-white/10'}`}

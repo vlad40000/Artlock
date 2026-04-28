@@ -1,22 +1,24 @@
 # WORKFLOW_STATE.md
 
 ## Current Status
-- Modernized Artlock Studio interface with **Always-On Command Dock**.
-- **Draggable & Customizable Dock**: Reposition via Phase Badge; customize buttons in config mode.
-- **Procreate-Style Canvas Gestures**: 2-finger tap (Undo), 3-finger tap (Redo), 4-finger tap (Toggle Full-screen), Pinch zoom, Rotate, and Flick-to-snap.
-- **Viewport Management**: Centered artboard with persistent scale/pan/rotation state.
-- **Unified Operation Logic**: Fixed `PHASES` mapping to ensure all studio operations target the correct API endpoints.
-- **Type Safety Overhaul**: Implemented strict union types for `derivePresetId` parameters, ensuring compile-time validation for all operation and mode inputs.
-- **Clean AI Branding**: Reverted explicit Gemini badges for a minimalist, artist-centric workspace.
-- **Redundancy Cleanup**: Resolved `GenerationPresetId` union type duplication.
+- **Hybrid Semantic Masking**: Successfully pivoted from manual-only painting to a hybrid model. Users can now use voice ("mask the forearm") to define focus areas (Semantic Region Hinting).
+- **Tablet & Gesture Hardening**:
+  - `MaskCanvas` now uses `pointer-events: none` by default, enabling multi-touch pinch-zoom and pan gestures to pass through even when masking mode is active.
+  - Full touch support added for **Command Dock** dragging.
+- **Voice Engine Upgrade**: Voice commands now support structured data, allowing for "area-specific" masking (e.g., "Focus on the rose").
+- **UI Improvements**:
+  - Added an active **FOCUS** badge for semantic hints with a quick-clear 'X' button.
+  - Renamed "Mask" to "Area" in the dock to better reflect the new semantic capabilities.
+- **Auth Modernization**: Cinematic, glassmorphism Login screen with premium TLS branding.
+- **Strict Type Safety**: TypeScript types now strictly enforce AI generation profiles and complex voice command structures.
 
 ## Technical Details
-- `hooks/useCanvasGestures.ts` handles complex touch interactions.
-- `StudioClient` manages viewport transform state and merges it with UI modernization logic.
-- `lib/ai/generation-profiles.ts` now enforces strict input validation for AI preset derivation.
-- Build and Typecheck are passing; unit tests updated to align with strict typing.
+- `useCanvasGestures.ts`: Handles Procreate-style gestures (Undo, Redo, Zoom, Pan, etc.).
+- `MaskCanvas.tsx`: Hardened for tablets; uses `pointer-events-auto` only when actively masking.
+- `voice-command-parser.ts`: Enhanced regex to extract semantic subjects from masking commands.
+- `studio-client.tsx`: Centralized state for `regionHint`, `maskType`, and `maskAssetId`.
 
 ## Next Steps
-- Implement a global History Manager to fulfill Undo/Redo gesture callbacks.
-- Persist `dockPosition` and `dockItems` state to user session metadata.
-- Optimize canvas rendering for extremely high-resolution reference images.
+- **History Manager**: Fully integrate gesture callbacks with a global application state stack.
+- **Cloud Persistence**: Save all dock preferences and viewport states to the user's project metadata.
+- **Performance**: Monitor mask asset generation speeds on high-latency mobile networks.

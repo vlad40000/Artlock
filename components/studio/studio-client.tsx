@@ -38,6 +38,8 @@ import type { VoiceCommand } from './voice/voice-command-parser';
 import { useCanvasGestures } from '@/hooks/useCanvasGestures';
 import { Operation, operationAction } from './studio-sidebar';
 import type { TattooQAReport } from '@/lib/ai/prompt-contracts/tattoo-qa';
+import { MaskCanvas } from './shared/mask-canvas';
+import { clientUploadAsset } from '@/lib/client/upload';
 
 // --- CONFIG ---
 const DEFAULT_MODE = 'Surgical Local';
@@ -143,6 +145,7 @@ function StudioCommandDock({
   onRunAudit,
   onOpenExport,
   onRelock,
+  onToggleMask,
 }: {
   activeDrawer: string | null;
   setActiveDrawer: React.Dispatch<React.SetStateAction<string | null>>;
@@ -158,6 +161,7 @@ function StudioCommandDock({
   onRunAudit?: () => void;
   onOpenExport?: () => void;
   onRelock?: () => void;
+  onToggleMask?: () => void;
 }) {
   const [isConfiguring, setIsConfiguring] = useState(false);
   const phase = PHASES.find((item) => item.id === activePhase) || PHASES[0];
@@ -170,6 +174,7 @@ function StudioCommandDock({
     qa: { label: "Audit", icon: "◉" },
     export: { label: "Export", icon: "⤓" },
     relock: { label: "Sync Lock", icon: "🔃" },
+    mask: { label: "Area", icon: "🎯" },
   };
 
   const canRun =
@@ -190,6 +195,7 @@ function StudioCommandDock({
       case 'qa': onRunAudit?.(); break;
       case 'export': onOpenExport?.(); break;
       case 'relock': onRelock?.(); break;
+      case 'mask': onToggleMask?.(); break;
       default: toggleDrawer(id);
     }
   };
@@ -214,10 +220,34 @@ function StudioCommandDock({
     window.addEventListener('mouseup', onMouseUp);
   };
 
+  const onTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    dragRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      initialX: dockPosition.x,
+      initialY: dockPosition.y,
+    };
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+  };
+
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragRef.current) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
+    setDockPosition({
+      x: dragRef.current.initialX + dx,
+      y: dragRef.current.initialY + dy,
+    });
+  }, [setDockPosition]);
+
+  const onTouchMove = useCallback((e: TouchEvent) => {
+    if (!dragRef.current) return;
+    e.preventDefault(); // Prevent scrolling while dragging
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragRef.current.startX;
+    const dy = touch.clientY - dragRef.current.startY;
     setDockPosition({
       x: dragRef.current.initialX + dx,
       y: dragRef.current.initialY + dy,
@@ -230,6 +260,12 @@ function StudioCommandDock({
     window.removeEventListener('mouseup', onMouseUp);
   }, [onMouseMove]);
 
+  const onTouchEnd = useCallback(() => {
+    dragRef.current = null;
+    window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('touchend', onTouchEnd);
+  }, [onTouchMove]);
+
   return (
     <aside 
       style={{ left: dockPosition.x, top: dockPosition.y, transform: 'translateY(-50%)' }}
@@ -237,6 +273,7 @@ function StudioCommandDock({
     >
       <div 
         onMouseDown={onMouseDown}
+        onTouchStart={onTouchStart}
         className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-[9px] font-black uppercase tracking-[0.08em] text-white/45 cursor-move active:scale-95 transition-transform" 
         title="Drag to reposition"
       >
@@ -330,6 +367,10 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [chrome, setChrome] = useState(true);
   const [activePhaseId, setActivePhaseId] = useState('core-1c');
   const [showQuickMenu, setShowQuickMenu] = useState(false);
+  const [showMask, setShowMask] = useState(false);
+  const [maskAssetId, setMaskAssetId] = useState<string | null>(null);
+  const [regionHint, setRegionHint] = useState<string | null>(null);
+  const [maskType, setMaskType] = useState<'include' | 'exclude'>('include');
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
   const [dockPosition, setDockPosition] = useState({ x: 16, y: 400 });
@@ -459,6 +500,21 @@ export function StudioClient({ detail }: StudioClientProps) {
       case 'FILL_REQUEST':
         setRequest(command.value as string);
         break;
+      case 'TOGGLE_MASK':
+        setShowMask(!!command.value);
+        setStatus(command.value ? 'Masking enabled.' : 'Masking disabled.');
+        break;
+      case 'SET_MASK_TYPE': {
+        const val = command.value as unknown as { type: 'include' | 'exclude', subject?: string };
+        setMaskType(val.type);
+        if (val.subject) {
+          setRegionHint(val.subject);
+          setStatus(`Target area: ${val.subject} (${val.type})`);
+        } else {
+          setStatus(`Mask mode: ${val.type}`);
+        }
+        break;
+      }
     }
   }, []);
 
@@ -560,9 +616,6 @@ export function StudioClient({ detail }: StudioClientProps) {
       let endpoint = '';
       let body: Record<string, unknown> = {};
 
-      // Handle Edit Run
-      let maskAssetId: string | null = null;
-
       switch (operation) {
         case 'Surgical':
           endpoint = `/api/sessions/${detail.session.id}/surgical-edit`;
@@ -570,6 +623,8 @@ export function StudioClient({ detail }: StudioClientProps) {
             delta1: request.trim(),
             baseAssetId: displayAsset?.id,
             maskAssetId,
+            regionHint,
+            maskType,
             designFidelity: fidelityNorm,
             detailLoad: detailNorm,
             generationPresetId: presetId,
@@ -1053,8 +1108,19 @@ export function StudioClient({ detail }: StudioClientProps) {
           )}
 
           {/* Badge */}
-          <div className="tls-artboard-badge">
+          <div className="tls-artboard-badge flex items-center gap-2">
             {detail?.latestApprovedAsset?.id === displayAsset?.id ? 'LATEST APPROVED' : 'DRAFT'} / 4096 PX
+            {regionHint && (
+              <div className="flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded bg-tls-amber text-black text-[8px] font-black animate-tls-slide-in">
+                <span>FOCUS: {regionHint.toUpperCase()}</span>
+                <button 
+                  onClick={() => { setRegionHint(null); setStatus('Target area cleared.'); }}
+                  className="hover:scale-110 transition-transform cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="absolute inset-0 flex items-center justify-center">
@@ -1067,6 +1133,24 @@ export function StudioClient({ detail }: StudioClientProps) {
               </div>
             )}
           </div>
+
+          {showMask && (
+            <MaskCanvas
+              width={2048}
+              height={2048}
+              isActive={showMask}
+              onExport={async (blob) => {
+                if (!detail?.project.id) return;
+                try {
+                  const asset = await clientUploadAsset(blob, detail.project.id, 'mask');
+                  setMaskAssetId(asset.id);
+                  setStatus('Mask updated.');
+                } catch (err) {
+                  setStatus('Mask upload failed.');
+                }
+              }}
+            />
+          )}
         </section>
       </main>
 
@@ -1085,6 +1169,7 @@ export function StudioClient({ detail }: StudioClientProps) {
         onRunAudit={handleGetCritique}
         onOpenExport={() => setShowExportMenu(true)}
         onRelock={handleRelock}
+        onToggleMask={() => setShowMask(!showMask)}
       />
 
       {chrome && (
