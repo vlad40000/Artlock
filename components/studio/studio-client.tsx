@@ -95,14 +95,14 @@ function IconButton({ children, active, onClick, title }: { children: React.Reac
 }
 
 const PHASES = [
-  { id: "core-0", code: "REF", label: "Reference Board", kind: "intake", op: "Build" },
-  { id: "core-1a", code: "LOCK", label: "Lock Extraction", kind: "read", op: "Build" },
-  { id: "core-1b", code: "BASE", label: "Initial Lock", kind: "build", op: "Build" },
-  { id: "core-1c", code: "SRG", label: "Surgical Delta", kind: "edit", op: "Edit" },
-  { id: "core-1d", code: "PVT", label: "Creative Delta", kind: "delta", op: "Delta" },
-  { id: "tat-2", code: "TURN", label: "Turnaround", kind: "edit", op: "Edit" },
+  { id: "core-0", code: "REF", label: "Reference Board", kind: "intake", op: "Extract" },
+  { id: "core-1a", code: "LOCK", label: "Lock Extraction", kind: "read", op: "Extract" },
+  { id: "core-1b", code: "BASE", label: "Initial Lock", kind: "build", op: "Surgical" },
+  { id: "core-1c", code: "SRG", label: "Surgical Delta", kind: "edit", op: "Surgical" },
+  { id: "core-1d", code: "PVT", label: "Creative Delta", kind: "delta", op: "Creative" },
+  { id: "tat-2", code: "TURN", label: "Turnaround", kind: "edit", op: "Turnaround" },
   { id: "tat-3", code: "STNC", label: "Stencil", kind: "build", op: "Stencil" },
-  { id: "tat-4", code: "VAR", label: "Variants", kind: "build", op: "Variants" },
+  { id: "tat-4", code: "VAR", label: "Variants", kind: "build", op: "Variant" },
   { id: "tat-5", code: "MOCK", label: "Mockup", kind: "mock", op: "Mockup" },
 ];
 

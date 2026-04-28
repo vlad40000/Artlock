@@ -12,7 +12,6 @@ export type GenerationPresetId =
   | 'surgicalLocal'
   | 'surgicalBalanced'
   | 'creativeControlled'
-  | 'creativeControlled'
   | 'creativeExpressive';
 
 export interface GenerationProfile {
