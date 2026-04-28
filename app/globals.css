@@ -312,7 +312,7 @@
 .tls-shell {
   position: fixed;
   inset: 0;
-  overflow: hidden;
+  overflow: auto; /* Allow overflow as requested */
   --tls-stage-left: 0px;
   --tls-stage-right: 0px;
   --tls-stage-top: 0px;
@@ -323,6 +323,11 @@
   background:
     radial-gradient(circle at center, #201812 0%, #090807 64%),
     #080807;
+  
+  /* Ensure a very large pannable surface exists for infinite-pan feeling */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tls-shell::before {
@@ -558,8 +563,10 @@
     height: 100%;
     border-radius: 28px;
     background: #e8dfce;
-    overflow: hidden;
+    overflow: auto; /* Allow scrollbars if contents exceed artboard bounds */
     position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.1) transparent;
   }
 
   .tls-artboard-badge {

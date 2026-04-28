@@ -300,30 +300,54 @@ export function useCanvasGestures(
       callbacksRef.current.onZoom(clampScale(stateRef.current.scale * zoomFactor));
     }
 
+    let spacePressed = false;
+    let spaceDragging = false;
+    let rightDragging = false;
+    let dragStart: Point = { x: 0, y: 0 };
+    let dragPanStart: Point = { x: 0, y: 0 };
+
     function onMouseDown(e: MouseEvent) {
       if (isEditableTarget(e.target)) return;
-      if (e.button !== 1) return;
-      e.preventDefault();
-      middleDragging = true;
-      middleStart = { x: e.clientX, y: e.clientY };
-      middlePanStart = { x: stateRef.current.pan.x, y: stateRef.current.pan.y };
+      // Middle click (1) OR Space+Left (0) OR Right click (2)
+      if (e.button === 1 || (e.button === 0 && spacePressed) || e.button === 2) {
+        e.preventDefault();
+        if (e.button === 0) spaceDragging = true;
+        if (e.button === 2) rightDragging = true;
+        if (e.button === 1) middleDragging = true;
+        
+        dragStart = { x: e.clientX, y: e.clientY };
+        dragPanStart = { x: stateRef.current.pan.x, y: stateRef.current.pan.y };
+      }
     }
 
     function onMouseMove(e: MouseEvent) {
-      if (middleDragging) {
+      if (middleDragging || spaceDragging || rightDragging) {
         callbacksRef.current.onPan({
-          x: middlePanStart.x + (e.clientX - middleStart.x),
-          y: middlePanStart.y + (e.clientY - middleStart.y),
+          x: dragPanStart.x + (e.clientX - dragStart.x),
+          y: dragPanStart.y + (e.clientY - dragStart.y),
         });
       }
     }
 
     function onMouseUp(e: MouseEvent) {
       if (e.button === 1) middleDragging = false;
+      if (e.button === 0) spaceDragging = false;
+      if (e.button === 2) rightDragging = false;
+    }
+
+    function onContextMenu(e: MouseEvent) {
+      if (rightDragging) {
+        e.preventDefault();
+      }
     }
 
     function onKeyDown(e: KeyboardEvent) {
       if (isEditableTarget(e.target)) return;
+
+      if (e.code === 'Space') {
+        spacePressed = true;
+        if (el) el.style.cursor = 'grab';
+      }
 
       if ((e.metaKey || e.ctrlKey) && e.key === '0') {
         e.preventDefault();
@@ -343,6 +367,14 @@ export function useCanvasGestures(
       }
     }
 
+    function onKeyUp(e: KeyboardEvent) {
+      if (e.code === 'Space') {
+        spacePressed = false;
+        spaceDragging = false;
+        if (el) el.style.cursor = 'auto';
+      }
+    }
+
     el.addEventListener('pointerdown', onPointerDown);
     el.addEventListener('pointermove', onPointerMove);
     el.addEventListener('pointerup', onPointerUp);
@@ -351,9 +383,11 @@ export function useCanvasGestures(
     el.addEventListener('touchend', onTouchEnd);
     el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('mousedown', onMouseDown);
+    el.addEventListener('contextmenu', onContextMenu);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
 
     el.style.touchAction = 'none';
 
@@ -367,9 +401,11 @@ export function useCanvasGestures(
       el.removeEventListener('touchend', onTouchEnd);
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('mousedown', onMouseDown);
+      el.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
     };
   }, [containerRef]);
 
