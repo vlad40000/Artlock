@@ -135,9 +135,9 @@ function derivePresetIdServer(
  * Maps from UI concepts (operation name, mode label, variance label) to preset ID.
  */
 export function derivePresetId(
-  operation: string,
-  mode: string,
-  variance: string,
+  operation: 'Extract' | 'Surgical' | 'Creative' | 'Variant' | 'Turnaround' | 'Stencil' | 'Mockup' | 'QA',
+  mode: 'Lock Strict' | 'Surgical Local' | 'Creative',
+  variance: 'Locked' | 'Balanced' | 'Creative',
 ): GenerationPresetId {
   if (operation === 'Creative' || operation === 'Variant') {
     return variance === 'Locked' ? 'creativeControlled' : variance === 'Creative' ? 'creativeExpressive' : 'creativeControlled';

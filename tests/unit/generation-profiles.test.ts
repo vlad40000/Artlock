@@ -52,7 +52,7 @@ describe('Generation Profiles Logic', () => {
 
   describe('derivePresetId (Client-side)', () => {
     it('should derive creativeControlled for Creative operation and Balanced variance', () => {
-      const id = derivePresetId('Creative', 'Some Mode', 'Balanced');
+      const id = derivePresetId('Creative', 'Creative', 'Balanced');
       expect(id).toBe('creativeControlled');
     });
 

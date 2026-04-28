@@ -5,15 +5,17 @@
 - **Draggable & Customizable Dock**: Reposition via Phase Badge; customize buttons in config mode.
 - **Procreate-Style Canvas Gestures**: 2-finger tap (Undo), 3-finger tap (Redo), 4-finger tap (Toggle Full-screen), Pinch zoom, Rotate, and Flick-to-snap.
 - **Viewport Management**: Centered artboard with persistent scale/pan/rotation state.
-- **Artist-Friendly Terminology**: Terminology like "Inspiration", "Audit Source", "Scan DNA", and "Cast PNG".
-- **Enhanced Readability**: Expandable lock details in the source drawer.
-- **Gesture Contract**: Registered in `.agents/rules/PROCREATE_TOUCH_CONTRACT.md` and `AGENTS.md`.
+- **Unified Operation Logic**: Fixed `PHASES` mapping to ensure all studio operations (Extract, Surgical, Creative, etc.) target the correct API endpoints.
+- **Clean AI Branding**: Reverted explicit Gemini badges for a minimalist, artist-centric workspace.
+- **Redundancy Cleanup**: Resolved `GenerationPresetId` union type duplication in the generation engine.
 
 ## Technical Details
 - `hooks/useCanvasGestures.ts` handles complex touch interactions.
 - `StudioClient` manages viewport transform state and merges it with UI modernization logic.
+- API routing for studio actions is now fully aligned with the `Operation` type system.
 - Build is passing and UI is stable.
 
 ## Next Steps
-- Final user walkthrough of the combined gesture + dock UX.
-- Hooking up the Undo/Redo gesture callbacks to a real history manager.
+- Implement a global History Manager to fulfill Undo/Redo gesture callbacks.
+- Persist `dockPosition` and `dockItems` state to user session metadata.
+- Optimize canvas rendering for extremely high-resolution reference images.
