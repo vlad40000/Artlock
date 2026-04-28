@@ -95,11 +95,11 @@ function IconButton({ children, active, onClick, title }: { children: React.Reac
 }
 
 const PHASES = [
-  { id: "core-0", code: "REF", label: "Inspiration", kind: "intake", op: "Build" },
-  { id: "core-1a", code: "AUD", label: "Audit Source", kind: "read", op: "Build" },
-  { id: "core-1b", code: "BASE", label: "Draft Design", kind: "build", op: "Build" },
-  { id: "core-1c", code: "EDIT", label: "Surgical Touch", kind: "edit", op: "Edit" },
-  { id: "core-1d", code: "PVT", label: "Creative Pivot", kind: "delta", op: "Delta" },
+  { id: "core-0", code: "REF", label: "Reference Board", kind: "intake", op: "Build" },
+  { id: "core-1a", code: "LOCK", label: "Lock Extraction", kind: "read", op: "Build" },
+  { id: "core-1b", code: "BASE", label: "Initial Lock", kind: "build", op: "Build" },
+  { id: "core-1c", code: "SRG", label: "Surgical Delta", kind: "edit", op: "Edit" },
+  { id: "core-1d", code: "PVT", label: "Creative Delta", kind: "delta", op: "Delta" },
   { id: "tat-2", code: "TURN", label: "Turnaround", kind: "edit", op: "Edit" },
   { id: "tat-3", code: "STNC", label: "Stencil", kind: "build", op: "Stencil" },
   { id: "tat-4", code: "VAR", label: "Variants", kind: "build", op: "Variants" },
@@ -158,12 +158,12 @@ function StudioCommandDock({
 
   const ALL_ACTIONS: Record<string, { label: string; icon: string }> = {
     menu: { label: "Quick Menu", icon: "▦" },
-    locks: { label: "DNA Locks", icon: "▣" },
-    refs: { label: "Gallery", icon: "▧" },
-    layers: { label: "Layers", icon: "▤" },
-    qa: { label: "Audit Design", icon: "◉" },
-    export: { label: "Export PNG", icon: "⤓" },
-    relock: { label: "Sync Base", icon: "🔃" },
+    locks: { label: "Locks", icon: "▣" },
+    refs: { label: "References", icon: "▧" },
+    layers: { label: "Deltas", icon: "▤" },
+    qa: { label: "Audit", icon: "◉" },
+    export: { label: "Export", icon: "⤓" },
+    relock: { label: "Sync Lock", icon: "🔃" },
   };
 
   const canRun =
@@ -1143,12 +1143,12 @@ export function StudioClient({ detail }: StudioClientProps) {
             <div onClick={() => setShowQuickMenu(false)} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full border border-white/20 bg-black/80 backdrop-blur-xl flex items-center justify-center cursor-pointer hover:bg-white/10 transition-all shadow-2xl z-10">
               <X size={20} className="text-white/40" />
             </div>
-            <RadialNode label="Scan DNA" icon={<Play size={14}/>} angle={-90} radius={110} primary onClick={() => { handleRun(); setShowQuickMenu(false); }} />
-            <RadialNode label="DNA Locks" icon={<Lock size={14}/>} angle={-30} radius={110} onClick={() => { setActiveDrawer('locks'); setShowQuickMenu(false); }} />
-            <RadialNode label="Layer Stack" icon={<Layers size={14}/>} angle={30} radius={110} onClick={() => { setActiveDrawer('layers'); setShowQuickMenu(false); }} />
-            <RadialNode label="Inspiration" icon={<LayoutGrid size={14}/>} angle={90} radius={110} onClick={() => { setActiveDrawer('refs'); setShowQuickMenu(false); }} />
-            <RadialNode label="Cast PNG" icon={<Download size={14}/>} angle={150} radius={110} onClick={() => { handleSaveToDevice('png'); setShowQuickMenu(false); }} />
-            <RadialNode label="DNA Audit" icon={<Check size={14}/>} angle={210} radius={110} onClick={() => setShowQuickMenu(false)} />
+            <RadialNode label="Run Delta" icon={<Play size={14}/>} angle={-90} radius={110} primary onClick={() => { handleRun(); setShowQuickMenu(false); }} />
+            <RadialNode label="Locks" icon={<Lock size={14}/>} angle={-30} radius={110} onClick={() => { setActiveDrawer('locks'); setShowQuickMenu(false); }} />
+            <RadialNode label="Deltas" icon={<Layers size={14}/>} angle={30} radius={110} onClick={() => { setActiveDrawer('layers'); setShowQuickMenu(false); }} />
+            <RadialNode label="References" icon={<LayoutGrid size={14}/>} angle={90} radius={110} onClick={() => { setActiveDrawer('refs'); setShowQuickMenu(false); }} />
+            <RadialNode label="Export" icon={<Download size={14}/>} angle={150} radius={110} onClick={() => { handleSaveToDevice('png'); setShowQuickMenu(false); }} />
+            <RadialNode label="Audit" icon={<Check size={14}/>} angle={210} radius={110} onClick={() => setShowQuickMenu(false)} />
           </div>
         </div>
       )}
