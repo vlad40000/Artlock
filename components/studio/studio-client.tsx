@@ -1119,23 +1119,20 @@ export function StudioClient({ detail }: StudioClientProps) {
                 <button 
                   onClick={handleEnhancePrompt} 
                   disabled={!!busy || !request.trim()}
-                  className="h-8 flex items-center gap-2 rounded-lg bg-tls-amber/10 border border-tls-amber/30 px-3 text-[9px] font-black uppercase tracking-widest text-tls-amber hover:bg-tls-amber hover:text-black transition-all disabled:opacity-30 shadow-[0_0_15px_rgba(251,191,36,0.1)]"
+                  className="h-8 flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-3 text-[9px] font-black uppercase tracking-widest text-white/50 hover:bg-white/10 hover:text-white transition-all disabled:opacity-30"
                 >
-                  <Sparkles size={12} className="animate-pulse" />
-                  <span>Gemini Refine</span>
+                  <Sparkles size={12} />
+                  <span>Refine</span>
                 </button>
               </div>
             </div>
             <button
               onClick={handleRun}
               disabled={!!busy || (!request.trim() && ['Surgical', 'Creative'].includes(operation))}
-              className="tls-run-btn group"
+              className="tls-run-btn"
             >
-              <div className="flex items-center gap-2">
-                <Activity size={14} />
-                <span>{runLabel}</span>
-              </div>
-              <div className="text-[7px] font-black tracking-[0.2em] opacity-40 group-hover:opacity-100 transition-opacity mt-0.5">POWERED BY GEMINI 1.5 PRO</div>
+              <Activity size={14} />
+              <span>{runLabel}</span>
             </button>
           </section>
 
