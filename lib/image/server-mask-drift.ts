@@ -9,6 +9,8 @@ const DRIFT_TOLERANCE = 0.05;
 export const MASK_DRIFT_ERROR_MESSAGE =
   'Edit drifted outside the masked area. Tighten the mask or run as a direct edit.';
 
+export type MaskEditMode = 'include' | 'exclude';
+
 export interface ServerMaskDriftResult {
   drifted: boolean;
   dimensionsMatch: boolean;
@@ -58,6 +60,11 @@ function isPixelInsideMask(maskData: Buffer, offset: number) {
   return alpha > MASK_THRESHOLD || luma > MASK_THRESHOLD;
 }
 
+function isPixelAllowedByMask(maskData: Buffer, offset: number, maskType: MaskEditMode) {
+  const insideMask = isPixelInsideMask(maskData, offset);
+  return maskType === 'exclude' ? !insideMask : insideMask;
+}
+
 function isChangedPixel(baseData: Buffer, editedData: Buffer, offset: number) {
   return (
     Math.abs(baseData[offset] - editedData[offset]) > CHANGE_THRESHOLD ||
@@ -105,6 +112,7 @@ export async function validateServerMaskDrift(args: {
   baseBuffer: Buffer;
   editedBuffer: Buffer;
   maskBuffer: Buffer;
+  maskType?: MaskEditMode;
 }): Promise<ServerMaskDriftResult> {
   const [baseImage, editedImage, maskImage] = await Promise.all([
     toRawRgba(args.baseBuffer),
@@ -149,7 +157,7 @@ export async function validateServerMaskDrift(args: {
     const x = pixelIndex % baseImage.width;
     const y = Math.floor(pixelIndex / baseImage.width);
     trackPoint(changedBounds, x, y);
-    if (!isPixelInsideMask(maskImage.data, offset)) {
+    if (!isPixelAllowedByMask(maskImage.data, offset, args.maskType ?? 'include')) {
       outsideMaskPixels += 1;
       trackPoint(outsideMaskBounds, x, y);
     }
@@ -185,4 +193,53 @@ export async function validateServerMaskDrift(args: {
     outsideMaskBounds: finalizeBounds(outsideMaskBounds),
     message: drifted ? MASK_DRIFT_ERROR_MESSAGE : null,
   };
+}
+
+export async function clampEditToMask(args: {
+  baseBuffer: Buffer;
+  editedBuffer: Buffer;
+  maskBuffer: Buffer;
+  maskType?: MaskEditMode;
+}): Promise<Buffer> {
+  const [baseImage, editedImage, maskImage] = await Promise.all([
+    toRawRgba(args.baseBuffer),
+    toRawRgba(args.editedBuffer),
+    toRawRgba(args.maskBuffer),
+  ]);
+
+  const dimensionsMatch =
+    baseImage.width === editedImage.width &&
+    baseImage.height === editedImage.height &&
+    baseImage.width === maskImage.width &&
+    baseImage.height === maskImage.height;
+
+  if (!dimensionsMatch) {
+    throw new Error(MASK_DRIFT_ERROR_MESSAGE);
+  }
+
+  const outData = Buffer.from(editedImage.data);
+  const totalPixels = baseImage.width * baseImage.height;
+  const maskType = args.maskType ?? 'include';
+
+  for (let pixelIndex = 0; pixelIndex < totalPixels; pixelIndex++) {
+    const offset = pixelIndex * 4;
+    if (isPixelAllowedByMask(maskImage.data, offset, maskType)) {
+      continue;
+    }
+
+    outData[offset] = baseImage.data[offset];
+    outData[offset + 1] = baseImage.data[offset + 1];
+    outData[offset + 2] = baseImage.data[offset + 2];
+    outData[offset + 3] = baseImage.data[offset + 3];
+  }
+
+  return sharp(outData, {
+    raw: {
+      width: baseImage.width,
+      height: baseImage.height,
+      channels: 4,
+    },
+  })
+    .png()
+    .toBuffer();
 }

@@ -10,7 +10,11 @@ import { env } from '@/lib/utils/env';
 import { getOwnedSessionDetail, resolveSessionAsset } from '@/lib/server/session-detail';
 import { getImageDimensions } from '@/lib/utils/image-dimensions';
 import { resolveFromControls } from '@/lib/ai/generation-profiles';
-import { MASK_DRIFT_ERROR_MESSAGE, validateServerMaskDrift } from '@/lib/image/server-mask-drift';
+import {
+  MASK_DRIFT_ERROR_MESSAGE,
+  clampEditToMask,
+  validateServerMaskDrift,
+} from '@/lib/image/server-mask-drift';
 
 const paramsSchema = z.object({ sessionId: z.string().uuid() });
 const bodySchema = z.object({
@@ -143,8 +147,10 @@ export async function POST(
       temperature: profile.temperature,
     });
 
-    const editedBuffer = Buffer.from(edited.base64, 'base64');
-    const outputDimensions = getImageDimensions(editedBuffer, edited.mimeType);
+    let editedBuffer: Buffer = Buffer.from(edited.base64, 'base64');
+    let editedBase64 = edited.base64;
+    let editedMimeType = edited.mimeType;
+    let outputDimensions = getImageDimensions(editedBuffer, editedMimeType);
     let driftValidation:
       | {
           mode: 'unmasked';
@@ -182,10 +188,21 @@ export async function POST(
     };
 
     if (maskImage) {
+      editedBuffer = await clampEditToMask({
+        baseBuffer: sourceImage.buffer,
+        editedBuffer,
+        maskBuffer: maskImage.buffer,
+        maskType: body.maskType,
+      });
+      editedBase64 = editedBuffer.toString('base64');
+      editedMimeType = 'image/png';
+      outputDimensions = getImageDimensions(editedBuffer, editedMimeType);
+
       const driftResult = await validateServerMaskDrift({
         baseBuffer: sourceImage.buffer,
         editedBuffer,
         maskBuffer: maskImage.buffer,
+        maskType: body.maskType,
       });
 
       driftValidation = {
@@ -214,8 +231,8 @@ export async function POST(
     const blobPath = `sessions/${sessionId}/generated/${outputAssetId}.png`;
     const blobUrl = await uploadGeneratedAsset({
       path: blobPath,
-      base64: edited.base64,
-      mimeType: edited.mimeType,
+      base64: editedBase64,
+      mimeType: editedMimeType,
     });
 
     // Save asset metadata to Neon
@@ -224,7 +241,7 @@ export async function POST(
         id, project_id, kind, blob_url, mime_type, 
         width, height, source_asset_id, created_by_phase
       ) VALUES (
-        ${outputAssetId}, ${detail.project.id}, 'generated', ${blobUrl}, ${edited.mimeType},
+        ${outputAssetId}, ${detail.project.id}, 'generated', ${blobUrl}, ${editedMimeType},
         ${outputDimensions?.width ?? baseAsset.width}, ${outputDimensions?.height ?? baseAsset.height}, ${baseAsset.id}, '1B'
       )
     `;
