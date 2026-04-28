@@ -140,6 +140,9 @@ function StudioCommandDock({
   setDockPosition,
   dockItems,
   setDockItems,
+  onRunAudit,
+  onOpenExport,
+  onRelock,
 }: {
   activeDrawer: string | null;
   setActiveDrawer: React.Dispatch<React.SetStateAction<string | null>>;
@@ -152,6 +155,9 @@ function StudioCommandDock({
   setDockPosition: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   dockItems: string[];
   setDockItems: React.Dispatch<React.SetStateAction<string[]>>;
+  onRunAudit?: () => void;
+  onOpenExport?: () => void;
+  onRelock?: () => void;
 }) {
   const [isConfiguring, setIsConfiguring] = useState(false);
   const phase = PHASES.find((item) => item.id === activePhase) || PHASES[0];
@@ -181,6 +187,9 @@ function StudioCommandDock({
       case 'locks': toggleDrawer('locks'); break;
       case 'refs': toggleDrawer('refs'); break;
       case 'layers': toggleDrawer('layers'); break;
+      case 'qa': onRunAudit?.(); break;
+      case 'export': onOpenExport?.(); break;
+      case 'relock': onRelock?.(); break;
       default: toggleDrawer(id);
     }
   };
@@ -1073,6 +1082,9 @@ export function StudioClient({ detail }: StudioClientProps) {
         setDockPosition={setDockPosition}
         dockItems={dockItems}
         setDockItems={setDockItems}
+        onRunAudit={handleGetCritique}
+        onOpenExport={() => setShowExportMenu(true)}
+        onRelock={handleRelock}
       />
 
       {chrome && (
@@ -1167,7 +1179,7 @@ export function StudioClient({ detail }: StudioClientProps) {
             <RadialNode label="Deltas" icon={<Layers size={14}/>} angle={30} radius={110} onClick={() => { setActiveDrawer('layers'); setShowQuickMenu(false); }} />
             <RadialNode label="References" icon={<LayoutGrid size={14}/>} angle={90} radius={110} onClick={() => { setActiveDrawer('refs'); setShowQuickMenu(false); }} />
             <RadialNode label="Export" icon={<Download size={14}/>} angle={150} radius={110} onClick={() => { setShowExportMenu(true); setShowQuickMenu(false); }} />
-            <RadialNode label="Audit" icon={<Check size={14}/>} angle={210} radius={110} onClick={() => setShowQuickMenu(false)} />
+            <RadialNode label="Audit" icon={<Check size={14}/>} angle={210} radius={110} onClick={() => { handleGetCritique(); setShowQuickMenu(false); }} />
           </div>
         </div>
       )}
