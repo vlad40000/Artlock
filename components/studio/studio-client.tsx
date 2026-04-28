@@ -325,6 +325,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
   const [dockPosition, setDockPosition] = useState({ x: 16, y: 400 });
   const [dockItems, setDockItems] = useState(['menu', 'locks', 'refs', 'layers']);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const canvasTransformStyle = useMemo<React.CSSProperties>(() => ({
     transform: `translate(-50%, -50%) translate(${Math.round(canvasPan.x)}px, ${Math.round(canvasPan.y)}px) scale(${canvasScale}) rotate(${canvasRotation}deg)`,
@@ -926,6 +927,24 @@ export function StudioClient({ detail }: StudioClientProps) {
       </div>
 
       <div className="tls-drawer-body scrollbar-hide space-y-2">
+        {detail?.referenceAsset && (
+          <div 
+            onClick={() => setPreviewAssetId(detail.referenceAsset!.id)} 
+            className={`flex justify-between items-center p-3 bg-white/5 border rounded-xl transition-all cursor-pointer ${previewAssetId === detail.referenceAsset.id ? 'border-tls-amber bg-tls-amber-soft' : 'border-white/5 hover:border-white/20'}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-black overflow-hidden relative border border-white/10 shrink-0">
+                <img src={detail.referenceAsset.blob_url} className="w-full h-full object-cover" alt="ref" />
+              </div>
+              <div>
+                <div className="text-[10px] font-bold tracking-wider text-white uppercase opacity-60">Base Reference</div>
+                <div className="text-[10px] text-neutral-500 uppercase tracking-tighter">Initial Lock Source</div>
+              </div>
+            </div>
+            <div className={`w-2 h-2 rounded-full ${previewAssetId === detail.referenceAsset.id ? 'bg-tls-amber shadow-[0_0_8px_#fbbf24]' : 'bg-white/10'}`} />
+          </div>
+        )}
+
         {detail?.editRuns.map(run => (
           <div 
             key={run.id} 
@@ -1147,7 +1166,7 @@ export function StudioClient({ detail }: StudioClientProps) {
             <RadialNode label="Locks" icon={<Lock size={14}/>} angle={-30} radius={110} onClick={() => { setActiveDrawer('locks'); setShowQuickMenu(false); }} />
             <RadialNode label="Deltas" icon={<Layers size={14}/>} angle={30} radius={110} onClick={() => { setActiveDrawer('layers'); setShowQuickMenu(false); }} />
             <RadialNode label="References" icon={<LayoutGrid size={14}/>} angle={90} radius={110} onClick={() => { setActiveDrawer('refs'); setShowQuickMenu(false); }} />
-            <RadialNode label="Export" icon={<Download size={14}/>} angle={150} radius={110} onClick={() => { handleSaveToDevice('png'); setShowQuickMenu(false); }} />
+            <RadialNode label="Export" icon={<Download size={14}/>} angle={150} radius={110} onClick={() => { setShowExportMenu(true); setShowQuickMenu(false); }} />
             <RadialNode label="Audit" icon={<Check size={14}/>} angle={210} radius={110} onClick={() => setShowQuickMenu(false)} />
           </div>
         </div>
@@ -1161,6 +1180,79 @@ export function StudioClient({ detail }: StudioClientProps) {
         >
           <Maximize2 size={20} />
         </button>
+      )}
+
+      {/* EXPORT OPTIONS MENU */}
+      {showExportMenu && (
+        <div className="absolute inset-0 z-[200] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/84 backdrop-blur-xl" onClick={() => setShowExportMenu(false)} />
+          <div className="relative w-[min(480px,90vw)] bg-tls-panel-heavy border border-white/10 rounded-3xl p-8 shadow-[0_32px_80px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-tls-amber mb-1">Export Engine</h3>
+                <h2 className="text-2xl font-semibold">Save Artwork</h2>
+              </div>
+              <button onClick={() => setShowExportMenu(false)} className="h-10 w-10 grid place-items-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 space-y-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/30 px-1">Download to Device</div>
+                <div className="grid grid-cols-4 gap-2">
+                  {['png', 'jpeg', 'psd', 'pdf'].map(fmt => (
+                    <button 
+                      key={fmt} 
+                      onClick={() => { handleSaveToDevice(fmt); setShowExportMenu(false); }}
+                      className="h-14 rounded-2xl bg-white/[0.04] border border-white/10 flex flex-col items-center justify-center gap-1 hover:bg-white hover:text-black transition-all group"
+                    >
+                      <Download size={16} className="group-hover:scale-110 transition-transform" />
+                      <span className="text-[10px] font-bold uppercase">{fmt}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/30 px-1">Studio Cloud</div>
+                <button 
+                  onClick={() => { setMessage({ text: "Saved to Cloud Storage", type: 'info' }); setShowExportMenu(false); }}
+                  className="w-full h-16 rounded-2xl bg-tls-amber/10 border border-tls-amber/20 flex items-center gap-4 px-4 hover:bg-tls-amber hover:text-black transition-all group"
+                >
+                  <Activity size={20} />
+                  <div className="text-left">
+                    <div className="text-[11px] font-black uppercase tracking-widest">Persist Session</div>
+                    <div className="text-[9px] opacity-60">Sync all metadata</div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/30 px-1">Pipeline</div>
+                <button 
+                  onClick={() => { if (displayAsset) handlePromoteToReference(displayAsset.id); setShowExportMenu(false); }}
+                  className="w-full h-16 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center gap-4 px-4 hover:bg-white hover:text-black transition-all group"
+                >
+                  <LayoutGrid size={20} />
+                  <div className="text-left">
+                    <div className="text-[11px] font-black uppercase tracking-widest">To Board</div>
+                    <div className="text-[9px] opacity-60">New Ref Source</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-8 pt-8 border-t border-white/5">
+              <button 
+                onClick={() => { setMessage({ text: "Checkpoint Created", type: 'info' }); setShowExportMenu(false); }}
+                className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-[11px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all"
+              >
+                Create Restore Checkpoint
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* TOASTS */}
