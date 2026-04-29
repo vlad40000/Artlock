@@ -274,11 +274,12 @@ export async function POST(
       ) VALUES (
         ${editRunId}, ${sessionId}, '1B', ${baseAsset.id}, ${outputAssetId},
         ${lock.id}, ${maskAsset?.id ?? null}, ${body.delta1}, ${body.delta2 ?? null},
-        'none', ${body.regionHint || maskAsset ? JSON.stringify({
+        'none', ${JSON.stringify({
           regionHint: body.regionHint ?? null,
           maskAssetId: maskAsset?.id ?? null,
+          referenceAssetIds: uniqueReferenceAssetIds,
           driftValidation,
-        }) : JSON.stringify({ driftValidation })},
+        })},
         'succeeded', ${env.geminiImageModel}, ${TATTOO_PHASE_1B.version}
       )
     `;
@@ -291,7 +292,7 @@ export async function POST(
         baseAssetId: baseAsset.id,
         activeLockId: lock.id,
         maskAssetId: maskAsset?.id ?? null,
-        referenceAssetId: referenceAsset?.id ?? null,
+        referenceAssetIds: uniqueReferenceAssetIds,
       },
       driftValidation,
       params: { delta1: body.delta1, delta2: body.delta2 ?? null, poseDelta: 'none', regionHint: body.regionHint ?? null },

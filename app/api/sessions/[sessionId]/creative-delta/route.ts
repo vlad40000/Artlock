@@ -171,8 +171,7 @@ export async function POST(
         ${JSON.stringify({
           intensity: body.intensity,
           exclusions: body.exclusions ?? null,
-          referenceAssetId: referenceAsset?.id ?? null,
-          referenceLockId: referenceLock?.id ?? null,
+          referenceAssetIds: uniqueReferenceAssetIds,
           transferInstruction: body.transferInstruction ?? null,
           transferMode,
         })},
@@ -188,7 +187,7 @@ export async function POST(
         transformation: body.transformation,
         intensity: body.intensity,
         exclusions: body.exclusions ?? null,
-        referenceAssetId: referenceAsset?.id ?? null,
+        referenceAssetIds: uniqueReferenceAssetIds,
         transferMode,
       },
     });
