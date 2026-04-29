@@ -96,6 +96,7 @@ export interface PieceState {
 
   // Design Parameters (tracked in history)
   request?: string;
+  activeReferenceIds?: string[];
   fidelity?: number;
   detailLevel?: number;
 

@@ -685,20 +685,29 @@ export function StudioClient({ detail }: StudioClientProps) {
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      if (files.length === 1) {
-        // Single file legacy bootstrap path
-        const file = files[0];
+      const fileArray = Array.from(files);
+      
+      // If we don't have a session ID yet, bootstrap with the first file
+      if (!piece.id) {
+        setBusy('INITIALIZING SESSION');
         try {
-          await bootstrap(file, {
+          const { projectId, sessionId } = await bootstrap(firstFile, {
             projectId: detail?.project.id,
             sessionId: detail?.session.id,
           });
-        } catch (_) {
+          
+          if (fileArray.length > 1 && projectId) {
+            const remainingFiles = fileArray.slice(1);
+            await batchUpload(remainingFiles, projectId);
+          }
+        } catch (err: any) {
+          setMessage({ text: `Bootstrap failed: ${err.message}`, type: 'error' });
         } finally {
+          setBusy(null);
           e.target.value = '';
         }
       } else {
-        // Multiple files path
+        // We already have a session, just batch upload
         await handleBatchUpload(files);
         e.target.value = '';
       }
@@ -1101,6 +1110,9 @@ export function StudioClient({ detail }: StudioClientProps) {
                     : 'border-white/5 grayscale-[0.8] hover:grayscale-0 hover:border-white/20'
                 } ${isLarge ? 'col-span-2 row-span-2' : isWide ? 'col-span-2' : isTall ? 'row-span-2' : ''}`}
               >
+                <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/60 backdrop-blur-md border border-white/10 z-20">
+                  <span className="text-[10px] font-black text-tls-amber">REF{i + 1}</span>
+                </div>
                 <img src={url} className="w-full h-full object-cover" alt="ref" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
                   <div className="flex items-center justify-between w-full">
@@ -1352,13 +1364,18 @@ export function StudioClient({ detail }: StudioClientProps) {
 
       <div className="tls-drawer-body scrollbar-hide">
         <div className="grid grid-cols-2 gap-2 p-2">
-          {detail?.projectReferences?.map((ref) => (
+          {detail?.projectReferences?.map((ref, index) => (
             <button 
               key={ref.id} 
               onClick={() => handleUpdateReference(ref.id)} 
               className={`group relative aspect-square overflow-hidden rounded-xl border transition-all ${detail.referenceAsset?.id === ref.id ? "border-tls-amber shadow-[0_0_15px_rgba(251,191,36,0.2)]" : "border-white/[0.08] bg-white/[0.055] hover:border-white/30"}`}
             >
               {ref.blob_url && <img src={ref.blob_url} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" />}
+              
+              <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 z-10">
+                <span className="text-[8px] font-black text-tls-amber">REF{index + 1}</span>
+              </div>
+
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
                 <div className="text-white text-[8px] font-black tracking-widest uppercase">Select</div>
               </div>
@@ -1478,7 +1495,7 @@ export function StudioClient({ detail }: StudioClientProps) {
               <div className="flex items-center justify-between px-2">
                 <div className="flex items-center gap-2 text-tls-muted text-[10px] font-black tracking-[0.2em] uppercase">
                   <span className="text-tls-amber">✦</span>
-                  <span>Artist Instruction</span>
+                  <span>Artist Instruction (Use Ref1, Ref2... to link anchors)</span>
                 </div>
                 <div className="tls-readonly-pill">Read Only Phase</div>
               </div>
