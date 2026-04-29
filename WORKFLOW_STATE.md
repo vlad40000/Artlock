@@ -36,8 +36,12 @@ Every agent session MUST start by reading [PRODUCT_TRUTH.md](file:///c:/Users/br
 - `StudioClient.tsx`: Centralized phase gating, history integration, browser fullscreen management, and the new Phase Sidebar rendering.
 - `globals.css`: Defines the new high-contrast aesthetic tokens.
 
+- **Multi-Reference UI**: Successfully wired the `activeReferenceIds` state to the Studio UI drawers. Artists can now multi-select up to 14 references, with each asset maintaining its own title and prompt-line context in the expanded Reference Assist drawer.
+- **Automated AI Mode Inference**: Moved `referenceAssistMode` and `transferMode` logic from the API layer into the Prompt Contracts. The system now automatically determines the optimal generation strategy based on the active reference set.
+- **Surgical Hardening (Phase 1)**: Integrated fixes for empty mask detection, normalized dimension-aware overlays, and target-region extraction to reduce design drift.
+
 ## Next Steps
 
 - **Performance**: Monitor mask asset generation speeds and server-side clamping latency on high-resolution images.
-- **Multi-Reference UI**: Wire the new `referenceAssetIds` array to the Studio UI drawers to enable multi-select for reference assets.
 - **Batch Processing**: Investigate optimizing history persistence by only saving diffs if payload size becomes an issue.
+- **Phase 1C Refinement**: Ensure Creative Delta variant generation remains bounded and traceable to the base image identity.

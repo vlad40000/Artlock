@@ -94,8 +94,6 @@ export async function POST(
       }),
     ).then((results) => results.filter((r): r is NonNullable<typeof r> => r !== null));
 
-    const transferMode = referenceImages.length > 0 ? body.transferMode : 'none';
-
     const sourceImage = await downloadAssetAsBase64(baseAsset.blob_url);
 
     let maskAsset = null;
@@ -132,7 +130,7 @@ export async function POST(
       exclusions: body.exclusions,
       referenceImages: referenceImages,
       transferInstruction: body.transferInstruction ?? null,
-      transferMode,
+      transferMode: body.transferMode,
       maskImageBase64: maskImage?.base64 ?? null,
       maskMimeType: maskAsset?.mime_type ?? maskImage?.mimeType ?? null,
       maskType: body.maskType,

@@ -139,7 +139,7 @@ export const TATTOO_PHASE_1C = {
     maskType?: 'include' | 'exclude';
   }) {
     const exclusions = args.exclusions?.trim() ? args.exclusions.trim() : '[X]';
-    const transferMode = args.transferMode ?? 'none';
+    const transferMode = (args.references && args.references.length > 0) ? (args.transferMode ?? 'none') : 'none';
     const symmetry = args.symmetryLock ? 'ENABLED' : 'DISABLED';
     const maskType = args.maskType ?? 'include';
 

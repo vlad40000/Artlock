@@ -1109,7 +1109,7 @@ export function StudioClient({ detail }: StudioClientProps) {
       const current = piece.activeReferenceIds || [];
       const next = current.includes(assetId)
         ? current.filter(id => id !== assetId)
-        : [...current, assetId].slice(0, 4);
+        : [...current, assetId].slice(0, 14);
       
       pushPiece({ ...piece, activeReferenceIds: next });
       return;
