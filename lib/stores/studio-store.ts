@@ -65,7 +65,12 @@ const MAX_HISTORY = 50;
 
 export const useStudioStore = create<StudioStore>((set, get) => ({
   // Initial State
-  present: {} as PieceState, // Initialized via resetStore
+  present: {
+    referenceImages: [],
+    editLayers: [],
+    variants: [],
+    activePhase: 'reference',
+  } as PieceState,
   past: [],
   future: [],
   operation: 'Extract',

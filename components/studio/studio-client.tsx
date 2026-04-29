@@ -447,7 +447,7 @@ export function StudioClient({ detail }: StudioClientProps) {
 
   // Workflow Gates
   const gates = useMemo(() => {
-    const isReferenceDone = piece.referenceImages.length > 0 || !!piece.designSurfaceDocument;
+    const isReferenceDone = (piece?.referenceImages?.length || 0) > 0 || !!piece?.designSurfaceDocument;
     const isBaseSelected = !!piece.baseImage;
     const isLocked = !!piece.locksActive;
 
@@ -1027,9 +1027,9 @@ export function StudioClient({ detail }: StudioClientProps) {
 
   const displayAsset = useMemo(() => {
     if (previewAssetId) {
-      const ref = detail?.projectReferences.find((a) => a.id === previewAssetId);
+      const ref = detail?.projectReferences?.find((a) => a.id === previewAssetId);
       if (ref) return ref;
-      const layer = detail?.editRuns.find((r) => r.outputAsset?.id === previewAssetId)?.outputAsset;
+      const layer = detail?.editRuns?.find((r) => r.outputAsset?.id === previewAssetId)?.outputAsset;
       if (layer) return layer;
     }
     return latestOutput ?? detail?.currentBaseAsset ?? detail?.referenceAsset;
@@ -1208,7 +1208,7 @@ export function StudioClient({ detail }: StudioClientProps) {
           </div>
         )}
 
-        {detail?.editRuns.map(run => (
+        {detail?.editRuns?.map(run => (
           <div 
             key={run.id} 
             onClick={() => setPreviewAssetId(run.outputAsset?.id || null)} 
@@ -1269,7 +1269,7 @@ export function StudioClient({ detail }: StudioClientProps) {
 
       <div className="tls-drawer-body scrollbar-hide">
         <div className="grid grid-cols-2 gap-2 p-2">
-          {detail?.projectReferences.map((ref) => (
+          {detail?.projectReferences?.map((ref) => (
             <button 
               key={ref.id} 
               onClick={() => handleUpdateReference(ref.id)} 
@@ -1326,7 +1326,7 @@ export function StudioClient({ detail }: StudioClientProps) {
                   Complete the following to unlock <span className="text-white font-bold">{PHASES.find(p => p.id === activePhaseId)?.label}</span>:
                 </p>
                 <div className="space-y-3 mb-8">
-                  {gates[activePhaseId].unmet.map((req: { label: string }, i: number) => (
+                  {gates[activePhaseId]?.unmet?.map((req: { label: string }, i: number) => (
                     <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-tls-surface border border-tls-border-soft">
                       <div className="w-2 h-2 rounded-full bg-tls-amber" />
                       <span className="text-[10px] font-black text-tls-text uppercase tracking-widest">{req.label}</span>
@@ -1477,9 +1477,9 @@ export function StudioClient({ detail }: StudioClientProps) {
               </div>
               <div className="space-y-2">
                 <p className="font-medium text-white/90">{qaReport.summary}</p>
-                {qaReport.findings.length > 0 && (
+                {(qaReport?.findings?.length || 0) > 0 && (
                   <ul className="space-y-1 pl-1">
-                    {qaReport.findings.map((finding: string, i: number) => (
+                    {qaReport?.findings?.map((finding: string, i: number) => (
                       <li key={i} className="text-white/60 flex gap-2">
                         <span className="text-tls-amber">•</span>
                         <span>{finding}</span>
