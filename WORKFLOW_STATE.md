@@ -12,6 +12,9 @@
   - Renamed "Mask" to "Area" in the dock to better reflect the new semantic capabilities.
 - **Auth Modernization**: Cinematic, glassmorphism Login screen with premium TLS branding.
 - **Strict Type Safety**: TypeScript types now strictly enforce AI generation profiles and complex voice command structures.
+- **Phase Sidebar (Left)**: Moved the phase track from the top bar to a dedicated vertical sidebar on the left.
+  - Supports quick phase switching with tooltips and lock status.
+  - Optimized for professional high-resolution displays.
 - **Fullscreen Canvas Mode**: Implemented the Browser Fullscreen API to enable a true full-screen canvas experience across all browsers. Integrated with:
   - **Top Bar**: A "Full Screen" button in the chrome.
   - **Gestures**: Consolidated with UI "clean mode" toggling.
@@ -23,7 +26,7 @@
 
 ## Technical Details
 - `useHistory.ts`: Generic state snapshot manager for the studio piece state. Supports functional updates.
-- `StudioClient.tsx`: Centralized phase gating, history integration, and browser fullscreen management.
+- `StudioClient.tsx`: Centralized phase gating, history integration, browser fullscreen management, and the new Phase Sidebar rendering.
 - `globals.css`: Defines the new high-contrast aesthetic tokens.
 
 ## Next Steps

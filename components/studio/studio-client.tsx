@@ -1058,27 +1058,6 @@ export function StudioClient({ detail }: StudioClientProps) {
         <span className="tls-topbar-title font-black text-white/92 tracking-[0.14em] uppercase">{operationLabel}</span>
       </div>
 
-      <nav className="tls-phase-track">
-        {PHASES.map((p) => {
-          const isLocked = gates[p.id].status === 'locked';
-          return (
-            <div
-              key={p.id}
-              className={`tls-phase-tab flex items-center gap-1.5 transition-all ${activePhaseId === p.id ? 'active' : ''} ${isLocked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/5'}`}
-              onClick={() => {
-                if (!isLocked) {
-                  setActivePhaseId(p.id);
-                  setOperation(p.op as Operation);
-                }
-              }}
-            >
-              {isLocked && <Lock size={10} className="text-white/40" />}
-              <span>{p.code}</span>
-            </div>
-          );
-        })}
-      </nav>
-
       <div className="flex items-center gap-1">
         <button className={`tls-topbar-icon ${activeDrawer === 'refs' ? 'active' : ''}`} onClick={() => setActiveDrawer(prev => prev === 'refs' ? null : 'refs')} title="Gallery Board">
           <LayoutGrid size={16} />
@@ -1103,6 +1082,32 @@ export function StudioClient({ detail }: StudioClientProps) {
         </button>
       </div>
     </header>
+  );
+
+  const renderPhaseSidebar = () => (
+    <aside className="tls-sidebar">
+      {PHASES.map((p) => {
+        const isLocked = gates[p.id].status === 'locked';
+        const isActive = activePhaseId === p.id;
+        
+        return (
+          <button
+            key={p.id}
+            disabled={isLocked}
+            onClick={() => {
+              if (!isLocked) {
+                setActivePhaseId(p.id);
+                setOperation(p.op as Operation);
+              }
+            }}
+            className={`tls-sidebar-tab ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
+          >
+            {isLocked ? <Lock size={14} /> : <span>{p.code}</span>}
+            <div className="tls-sidebar-label">{p.label}</div>
+          </button>
+        );
+      })}
+    </aside>
   );
 
   const renderLocksDrawer = () => {
@@ -1307,17 +1312,16 @@ export function StudioClient({ detail }: StudioClientProps) {
           )}
 
           {(!displayAsset && activePhaseId === 'reference') ? (
-            <div className="h-full flex flex-col items-center justify-center p-12 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-6 text-white/20">
-                <Upload size={24} />
+            <div 
+              onClick={() => uploadInputRef.current?.click()}
+              className="h-full w-full flex flex-col items-center justify-center cursor-pointer group transition-colors hover:bg-white/[0.02]"
+            >
+              <div className="w-20 h-20 rounded-full bg-white/[0.03] border border-white/5 flex items-center justify-center mb-6 text-white/10 group-hover:text-tls-amber group-hover:border-tls-amber/20 group-hover:bg-tls-amber/5 transition-all">
+                <Upload size={32} strokeWidth={1} />
               </div>
-              <h2 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40 mb-8">No Reference Asset</h2>
-              <button
-                onClick={() => uploadInputRef.current?.click()}
-                className="px-10 py-4 bg-white text-black rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:bg-tls-amber shadow-tls-heavy active:scale-95"
-              >
-                Upload to Begin
-              </button>
+              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20 group-hover:text-white/40 transition-colors">
+                Drop or Click to Begin
+              </div>
             </div>
           ) : (
             <div className="relative h-full w-full">
@@ -1394,6 +1398,7 @@ export function StudioClient({ detail }: StudioClientProps) {
 
       {chrome && (
         <>
+          {renderPhaseSidebar()}
           {renderTopBar()}
           {activeDrawer === 'locks' && renderLocksDrawer()}
           {activeDrawer === 'layers' && renderLayersDrawer()}
