@@ -98,13 +98,14 @@ function IconButton({ children, active, onClick, title }: { children: React.Reac
   );
 }
 
-const PHASES: { id: DesignPhase; code: string; label: string; kind: string; op: string }[] = [
-  { id: "reference", code: "REF", label: "Reference Board", kind: "intake", op: "Extract" },
-  { id: "extract", code: "LOCK", label: "Lock Extraction", kind: "read", op: "Extract" },
-  { id: "surgical", code: "SRG", label: "Surgical Delta", kind: "edit", op: "Surgical" },
-  { id: "variants", code: "VAR", label: "Variants", kind: "build", op: "Variant" },
-  { id: "stencil", code: "STNC", label: "Stencil", kind: "build", op: "Stencil" },
-  { id: "mockup", code: "MOCK", label: "Mockup", kind: "mock", op: "Mockup" },
+const PHASES: { id: DesignPhase; code: string; label: string; kind: string; op: string; icon: React.ReactNode }[] = [
+  { id: "reference", code: "REF", label: "Reference Board", kind: "intake", op: "Extract", icon: <ImagePlus size={16} /> },
+  { id: "extract", code: "LOCK", label: "Lock Extraction", kind: "read", op: "Extract", icon: <ShieldCheck size={16} /> },
+  { id: "surgical", code: "SRG", label: "Surgical Delta", kind: "edit", op: "Surgical", icon: <Activity size={16} /> },
+  { id: "creative", code: "CRT", label: "Creative Pivot", kind: "edit", op: "Creative", icon: <Sparkles size={16} /> },
+  { id: "variants", code: "VAR", label: "Variants", kind: "build", op: "Variant", icon: <Layers size={16} /> },
+  { id: "stencil", code: "STNC", label: "Stencil", kind: "build", op: "Stencil", icon: <Download size={16} /> },
+  { id: "mockup", code: "MOCK", label: "Mockup", kind: "mock", op: "Mockup", icon: <Maximize size={16} /> },
 ];
 
 function RadialNode({ label, icon, angle, radius, primary, onClick }: { label: string; icon: React.ReactNode; angle: number; radius: number; primary?: boolean; onClick: () => void }) {
@@ -1180,7 +1181,7 @@ export function StudioClient({ detail }: StudioClientProps) {
             }}
             className={`tls-sidebar-tab ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
           >
-            {isLocked ? <Lock size={14} /> : <span>{p.code}</span>}
+            {isLocked ? <Lock size={14} /> : p.icon}
             <div className="tls-sidebar-label">{p.label}</div>
           </button>
         );
@@ -1373,6 +1374,7 @@ export function StudioClient({ detail }: StudioClientProps) {
 
   return (
     <div className={`tls-shell ${chrome ? 'tls-shell--chrome' : 'tls-shell--clean'} ${activeDrawer ? 'tls-shell--drawer-open' : ''}`}>
+      {chrome && renderTopBar()}
       <input type="file" ref={uploadInputRef} style={{ display: 'none' }} accept="image/*" multiple onChange={onFileChange} />
 
       {/* CANVAS STAGE */}
@@ -1395,7 +1397,6 @@ export function StudioClient({ detail }: StudioClientProps) {
             <div className="relative h-full w-full">
               {/* Badge */}
               <div className="tls-artboard-badge z-20 flex items-center gap-2">
-                {detail?.latestApprovedAsset?.id === displayAsset?.id ? 'LATEST APPROVED' : 'DRAFT'} / 4096 PX
                 {regionHint && (
                   <div className="flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded bg-tls-amber text-black text-[8px] font-black animate-tls-slide-in">
                     <span>FOCUS: {regionHint.toUpperCase()}</span>
