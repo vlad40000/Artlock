@@ -38,7 +38,6 @@ import type { VoiceCommand } from './voice/voice-command-parser';
 import { useCanvasGestures } from '@/hooks/useCanvasGestures';
 import { Operation, operationAction } from './studio-sidebar';
 import { clientUploadAsset } from '@/lib/client/upload';
-import { ReferenceBoard } from './shared/reference-board';
 import { MaskCanvas } from './shared/mask-canvas';
 import { TattooQAReport } from '@/lib/ai/prompt-contracts/tattoo-qa';
 import { useStudioStore } from '@/lib/stores/studio-store';
@@ -1307,39 +1306,18 @@ export function StudioClient({ detail }: StudioClientProps) {
             </div>
           )}
 
-          {activePhaseId === 'reference' ? (
-            <ReferenceBoard 
-              piece={piece}
-              onUpdatePiece={pushPiece}
-              onNextPhase={() => setActivePhaseId('extract')}
-              onUpload={handleBatchUpload}
-              isUploading={isBootstrapping}
-            />
-          ) : gates[activePhaseId].status === 'locked' ? (
-            <div className="h-full flex items-center justify-center p-12 bg-tls-bg text-center">
-              <div className="max-w-xs animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="w-20 h-20 bg-tls-amber/10 rounded-full flex items-center justify-center mx-auto mb-8">
-                  <Lock className="w-10 h-10 text-tls-amber" />
-                </div>
-                <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-4">Phase Locked</h3>
-                <p className="text-tls-muted text-sm leading-relaxed mb-8">
-                  Complete the following to unlock <span className="text-white font-bold">{PHASES.find(p => p.id === activePhaseId)?.label}</span>:
-                </p>
-                <div className="space-y-3 mb-8">
-                  {gates[activePhaseId]?.unmet?.map((req: { label: string }, i: number) => (
-                    <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-tls-surface border border-tls-border-soft">
-                      <div className="w-2 h-2 rounded-full bg-tls-amber" />
-                      <span className="text-[10px] font-black text-tls-text uppercase tracking-widest">{req.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  onClick={() => setActivePhaseId('reference')}
-                  className="px-6 py-3 bg-white text-black rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-tls-amber shadow-lg"
-                >
-                  Return to Requirements
-                </button>
+          {(!displayAsset && activePhaseId === 'reference') ? (
+            <div className="h-full flex flex-col items-center justify-center p-12 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-6 text-white/20">
+                <Upload size={24} />
               </div>
+              <h2 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40 mb-8">No Reference Asset</h2>
+              <button
+                onClick={() => uploadInputRef.current?.click()}
+                className="px-10 py-4 bg-white text-black rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:bg-tls-amber shadow-tls-heavy active:scale-95"
+              >
+                Upload to Begin
+              </button>
             </div>
           ) : (
             <div className="relative h-full w-full">

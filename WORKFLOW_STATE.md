@@ -15,20 +15,17 @@
 - **Fullscreen Canvas Mode**: Implemented the Browser Fullscreen API to enable a true full-screen canvas experience across all browsers. Integrated with:
   - **Top Bar**: A "Full Screen" button in the chrome.
   - **Gestures**: Consolidated with UI "clean mode" toggling.
-- **Sequential Workflow & Gating**: Implemented a strict phase-based gating system (Reference → Extraction → Surgical → Variants → Stencil). Progress is physically blocked in the UI until prerequisites (e.g., Base Image selection, Lock extraction) are met.
+- **Sequential Workflow & Gating**: Implemented a strict phase-based gating system (Extraction → Surgical → Variants → Stencil). Progress is physically blocked in the UI until prerequisites (e.g., Lock extraction) are met.
 - **Zustand Global History**: Migrated to a centralized `useStudioStore` managing atomic state snapshots.
   - Supports Procreate-style gestures: two-finger tap (undo), three-finger tap (redo), and three-finger scrub (clear layer).
   - Automatically snapshots AI generation results for seamless reversion.
-- **Standalone Reference Board**: Integrated a comprehensive Phase 0 library supporting multi-file uploads and native sketching.
 - **High-Contrast Dark Theme**: Upgraded studio aesthetics with a Slate-950 workspace and a TLS Deep Black (#080807) artboard for professional design focus.
 
 ## Technical Details
 - `useHistory.ts`: Generic state snapshot manager for the studio piece state. Supports functional updates.
-- `ReferenceBoard.tsx`: Standalone interaction model for project intake and base image selection.
 - `StudioClient.tsx`: Centralized phase gating, history integration, and browser fullscreen management.
 - `globals.css`: Defines the new high-contrast aesthetic tokens.
 
 ## Next Steps
 - **Cloud Persistence**: Finalize synchronization of the local `PieceState` history with the server database for cross-device sessions.
-- **Design Surface Hardening**: Expand the native sketching tools within the Reference Board.
 - **Performance**: Monitor mask asset generation speeds and server-side clamping latency on high-resolution images.
