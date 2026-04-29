@@ -148,11 +148,11 @@ function StudioCommandDock({
   onToggleMask,
 }: {
   activeDrawer: string | null;
-  setActiveDrawer: React.Dispatch<React.SetStateAction<string | null>>;
+  setActiveDrawer: (drawer: string | null) => void;
   activePhase: string;
   runPhaseAction: () => void;
   chrome: boolean;
-  setChrome: React.Dispatch<React.SetStateAction<boolean>>;
+  setChrome: (chrome: boolean) => void;
   setShowQuickMenu: React.Dispatch<React.SetStateAction<boolean>>;
   dockPosition: { x: number; y: number };
   setDockPosition: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
@@ -182,7 +182,7 @@ function StudioCommandDock({
   const canRun = phase.id !== "reference";
 
   const toggleDrawer = (drawer: string) => {
-    setActiveDrawer((prev) => (prev === drawer ? null : drawer));
+    setActiveDrawer(activeDrawer === drawer ? null : drawer);
   };
 
   const handleActionClick = (id: string) => {
@@ -394,6 +394,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [showMask, setShowMask] = useState(false);
+  const [showLockDetails, setShowLockDetails] = useState<string | null>(null);
   const [maskAssetId, setMaskAssetId] = useState<string | null>(null);
   const [regionHint, setRegionHint] = useState<string | null>(null);
   const [maskType, setMaskType] = useState<'include' | 'exclude'>('include');
@@ -553,7 +554,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   }, []);
 
   const handleToggleFullscreen = useCallback(() => {
-    setChrome((prev) => !prev);
+    setChrome(!chrome);
     setActiveDrawer(null);
     
     try {

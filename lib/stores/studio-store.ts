@@ -40,22 +40,22 @@ interface StudioStore {
    */
   updatePresent: (update: Partial<PieceState> | ((prev: PieceState) => Partial<PieceState>)) => void;
 
-  undo: () => void;
-  redo: () => void;
+  undo: () => boolean;
+  redo: () => boolean;
   canUndo: () => boolean;
   canRedo: () => boolean;
 
   // UI Actions
-  setOperation: (op: Operation) => void;
-  setActiveDrawer: (drawer: string | null) => void;
-  setBusy: (busy: string | null) => void;
-  setStatus: (status: string) => void;
-  setChrome: (chrome: boolean) => void;
-  setBrushSize: (size: number) => void;
-  setMaskMode: (mode: 'draw' | 'erase') => void;
-  setRequest: (request: string) => void;
-  setFidelity: (fidelity: number) => void;
-  setDetailLevel: (detailLevel: number) => void;
+  setOperation: (op: Operation | ((prev: Operation) => Operation)) => void;
+  setActiveDrawer: (drawer: (string | null) | ((prev: string | null) => string | null)) => void;
+  setBusy: (busy: (string | null) | ((prev: string | null) => string | null)) => void;
+  setStatus: (status: string | ((prev: string) => string)) => void;
+  setChrome: (chrome: boolean | ((prev: boolean) => boolean)) => void;
+  setBrushSize: (size: number | ((prev: number) => number)) => void;
+  setMaskMode: (mode: ('draw' | 'erase') | ((prev: 'draw' | 'erase') => 'draw' | 'erase')) => void;
+  setRequest: (request: string | ((prev: string) => string)) => void;
+  setFidelity: (fidelity: number | ((prev: number) => number)) => void;
+  setDetailLevel: (detailLevel: number | ((prev: number) => number)) => void;
   
   // Initialize/Reset
   resetStore: (initialPiece: PieceState) => void;
@@ -106,7 +106,7 @@ export const useStudioStore = create<StudioStore>((set, get) => ({
 
   undo: () => {
     const { past, present, future } = get();
-    if (past.length === 0) return;
+    if (past.length === 0) return false;
 
     const previous = past[past.length - 1];
     const nextPast = past.slice(0, past.length - 1);
@@ -116,11 +116,12 @@ export const useStudioStore = create<StudioStore>((set, get) => ({
       present: previous,
       future: [present, ...future],
     });
+    return true;
   },
 
   redo: () => {
     const { past, present, future } = get();
-    if (future.length === 0) return;
+    if (future.length === 0) return false;
 
     const next = future[0];
     const nextFuture = future.slice(1);
@@ -130,18 +131,39 @@ export const useStudioStore = create<StudioStore>((set, get) => ({
       present: next,
       future: nextFuture,
     });
+    return true;
   },
 
-  setOperation: (operation) => set({ operation }),
-  setActiveDrawer: (activeDrawer) => set({ activeDrawer }),
-  setBusy: (busy) => set({ busy }),
-  setStatus: (status) => set({ status }),
-  setChrome: (chrome) => set({ chrome }),
-  setBrushSize: (brushSize) => set({ brushSize }),
-  setMaskMode: (maskMode) => set({ maskMode }),
-  setRequest: (request) => set({ request }),
-  setFidelity: (fidelity) => set({ fidelity }),
-  setDetailLevel: (detailLevel) => set({ detailLevel }),
+  setOperation: (update) => set((state) => ({ 
+    operation: typeof update === 'function' ? (update as any)(state.operation) : update 
+  })),
+  setActiveDrawer: (update) => set((state) => ({ 
+    activeDrawer: typeof update === 'function' ? (update as any)(state.activeDrawer) : update 
+  })),
+  setBusy: (update) => set((state) => ({ 
+    busy: typeof update === 'function' ? (update as any)(state.busy) : update 
+  })),
+  setStatus: (update) => set((state) => ({ 
+    status: typeof update === 'function' ? (update as any)(state.status) : update 
+  })),
+  setChrome: (update) => set((state) => ({ 
+    chrome: typeof update === 'function' ? (update as any)(state.chrome) : update 
+  })),
+  setBrushSize: (update) => set((state) => ({ 
+    brushSize: typeof update === 'function' ? (update as any)(state.brushSize) : update 
+  })),
+  setMaskMode: (update) => set((state) => ({ 
+    maskMode: typeof update === 'function' ? (update as any)(state.maskMode) : update 
+  })),
+  setRequest: (update) => set((state) => ({ 
+    request: typeof update === 'function' ? (update as any)(state.request) : update 
+  })),
+  setFidelity: (update) => set((state) => ({ 
+    fidelity: typeof update === 'function' ? (update as any)(state.fidelity) : update 
+  })),
+  setDetailLevel: (update) => set((state) => ({ 
+    detailLevel: typeof update === 'function' ? (update as any)(state.detailLevel) : update 
+  })),
 
   resetStore: (initialPiece) => set({
     present: initialPiece,
