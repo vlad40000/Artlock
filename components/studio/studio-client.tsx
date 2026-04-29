@@ -400,7 +400,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [maskType, setMaskType] = useState<'include' | 'exclude'>('include');
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
-  const [dockPosition, setDockPosition] = useState({ x: 16, y: 400 });
+  const [dockPosition, setDockPosition] = useState({ x: 1400, y: 400 });
   const [dockItems, setDockItems] = useState(['menu', 'locks', 'refs', 'layers', 'undo', 'redo']);
 
   // Piece State & History
@@ -435,6 +435,10 @@ export function StudioClient({ detail }: StudioClientProps) {
     if (!isMounted.current) {
       resetStore(initialPiece);
       isMounted.current = true;
+      // Position dock on the right
+      if (typeof window !== 'undefined') {
+        setDockPosition({ x: window.innerWidth - 80, y: 400 });
+      }
     } else {
       // On Subsequent updates (like router.refresh), we just update the 'present'
       // without clearing the 'past'/'future' history.
@@ -691,6 +695,7 @@ export function StudioClient({ detail }: StudioClientProps) {
       if (!piece.id) {
         setBusy('INITIALIZING SESSION');
         try {
+          const firstFile = fileArray[0];
           const { projectId, sessionId } = await bootstrap(firstFile, {
             projectId: detail?.project.id,
             sessionId: detail?.session.id,
@@ -821,6 +826,7 @@ export function StudioClient({ detail }: StudioClientProps) {
           body = {
             delta1: request.trim(),
             baseAssetId: displayAsset?.id,
+            referenceAssetIds: piece.activeReferenceIds || [],
             maskAssetId,
             regionHint,
             maskType,
@@ -836,6 +842,7 @@ export function StudioClient({ detail }: StudioClientProps) {
             transformation: request.trim(),
             intensity: varianceToIntensity(DEFAULT_VARIANCE),
             baseAssetId: displayAsset?.id,
+            referenceAssetIds: piece.activeReferenceIds || [],
             maskAssetId,
             designFidelity: fidelityNorm,
             detailLoad: detailNorm,
@@ -909,6 +916,18 @@ export function StudioClient({ detail }: StudioClientProps) {
 
   const handleUpdateReference = async (assetId: string) => {
     if (!detail?.session.id) return;
+
+    // If we are in an editing phase, we toggle references for the prompt instead of switching the base.
+    if (activePhaseId !== 'reference') {
+      const current = piece.activeReferenceIds || [];
+      const next = current.includes(assetId)
+        ? current.filter(id => id !== assetId)
+        : [...current, assetId].slice(0, 4);
+      
+      pushPiece({ ...piece, activeReferenceIds: next });
+      return;
+    }
+
     setBusy('SWITCHING REFERENCE');
     try {
       const resp = await fetch(`/api/sessions/${detail.session.id}/update-reference`, {
@@ -916,10 +935,16 @@ export function StudioClient({ detail }: StudioClientProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assetId }),
       });
-      if (!resp.ok) throw new Error('Failed to update');
-      setMessage({ text: 'Reference updated', type: 'info' });
-      setPreviewAssetId(null);
+      if (!resp.ok) throw new Error('Failed to update reference');
+      
+      // Update local state
+      const newRef = detail.projectReferences.find(r => r.id === assetId);
+      if (newRef) {
+        pushPiece({ ...piece, baseImage: newRef.blob_url });
+      }
+
       router.refresh();
+      setMessage({ text: 'Base reference updated', type: 'info' });
     } catch (err: any) {
       setMessage({ text: err.message, type: 'error' });
     } finally {
@@ -1364,26 +1389,37 @@ export function StudioClient({ detail }: StudioClientProps) {
 
       <div className="tls-drawer-body scrollbar-hide">
         <div className="grid grid-cols-2 gap-2 p-2">
-          {detail?.projectReferences?.map((ref, index) => (
-            <button 
-              key={ref.id} 
-              onClick={() => handleUpdateReference(ref.id)} 
-              className={`group relative aspect-square overflow-hidden rounded-xl border transition-all ${detail.referenceAsset?.id === ref.id ? "border-tls-amber shadow-[0_0_15px_rgba(251,191,36,0.2)]" : "border-white/[0.08] bg-white/[0.055] hover:border-white/30"}`}
-            >
-              {ref.blob_url && <img src={ref.blob_url} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" />}
-              
-              <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md border border-white/10 z-10">
-                <span className="text-[8px] font-black text-tls-amber">REF{index + 1}</span>
-              </div>
+          {detail?.projectReferences?.map((ref) => {
+            const activeRefs = piece.activeReferenceIds || [];
+            const refIndex = activeRefs.indexOf(ref.id);
+            const isBase = detail.referenceAsset?.id === ref.id;
+            const isSelected = activePhaseId === 'reference' ? isBase : refIndex !== -1;
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                <div className="text-white text-[8px] font-black tracking-widest uppercase">Select</div>
-              </div>
-              {detail.referenceAsset?.id === ref.id && (
-                <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-tls-amber shadow-[0_0_8px_#fbbf24]" />
-              )}
-            </button>
-          ))}
+            return (
+              <button 
+                key={ref.id} 
+                onClick={() => handleUpdateReference(ref.id)} 
+                className={`group relative aspect-square overflow-hidden rounded-xl border transition-all ${isSelected ? "border-tls-amber shadow-[0_0_15px_rgba(251,191,36,0.3)]" : "border-white/[0.08] bg-white/[0.055] hover:border-white/30"}`}
+              >
+                {ref.blob_url && <img src={ref.blob_url} className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${isSelected ? 'opacity-100' : 'opacity-60 group-hover:opacity-80 group-hover:scale-105'}`} />}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                  <div className="text-white text-[8px] font-black tracking-widest uppercase">
+                    {activePhaseId === 'reference' ? 'Select Base' : (refIndex !== -1 ? `Ref ${refIndex + 1}` : 'Link Edit')}
+                  </div>
+                </div>
+                
+                {activePhaseId === 'reference' && isBase && (
+                  <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-tls-amber shadow-[0_0_8px_#fbbf24]" />
+                )}
+
+                {activePhaseId !== 'reference' && refIndex !== -1 && (
+                  <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-tls-amber text-black text-[9px] font-black shadow-lg">
+                    REF {refIndex + 1}
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </aside>
