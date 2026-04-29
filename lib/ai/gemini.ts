@@ -130,6 +130,7 @@ async function generateImageContentWithRetry(
 function buildImageConfig(args: {
   temperature: number;
   systemInstruction?: string;
+  thinkingLevel?: 'minimal' | 'high';
 }) {
   return {
     ...(args.systemInstruction ? { systemInstruction: args.systemInstruction } : {}),
@@ -140,7 +141,13 @@ function buildImageConfig(args: {
     temperature: args.temperature,
     topP: 0.95,
     maxOutputTokens: 65536,
-  };
+    ...(args.thinkingLevel ? { 
+      thinkingConfig: { 
+        includeThoughts: true, 
+        thinkingLevel: args.thinkingLevel 
+      } 
+    } : {}),
+  } as any;
 }
 
 function extractJsonBlock(text: string) {
@@ -331,12 +338,18 @@ export async function extractTattooLocks(args: {
   return text;
 }
 
+export interface ReferenceAssetInput {
+  base64: string;
+  mimeType: string;
+  designIdLock?: string | null;
+  styleIdLock?: string | null;
+}
+
 export async function runTattooSurgicalEdit(args: {
   baseImageBase64: string;
   maskImageBase64: string | null;
   maskMimeType?: string | null;
-  referenceImageBase64?: string | null;
-  referenceMimeType?: string | null;
+  referenceImages?: ReferenceAssetInput[];
   mimeType: string;
   designIdLock: string;
   styleIdLock: string;
@@ -345,15 +358,10 @@ export async function runTattooSurgicalEdit(args: {
   compositionIdLock: string;
   tattooIdLock: string;
   placementIdLock: string;
-  referenceDesignIdLock?: string | null;
-  referenceStyleIdLock?: string | null;
-  referenceAssistMode?: 'none' | 'reference_assist' | 'locked_reference_assist';
   delta1: string;
   delta2?: string | null;
   poseDelta?: string | null;
   regionHint?: string | null;
-  designFidelity?: number;
-  detailLoad?: number;
   symmetryLock?: boolean;
   tattooMode?: boolean;
   maskType?: 'include' | 'exclude';
@@ -363,6 +371,7 @@ export async function runTattooSurgicalEdit(args: {
   const prompt = TATTOO_PHASE_1B.buildPrompt({
     ...args,
     maskMode: args.maskImageBase64 ? 'provided' : 'none',
+    references: args.referenceImages ?? [],
   });
 
   const userParts: any[] = [
@@ -384,19 +393,24 @@ export async function runTattooSurgicalEdit(args: {
     });
   }
 
-  if (args.referenceImageBase64) {
-    userParts.push({
-      inlineData: {
-        mimeType: args.mimeType,
-        data: args.referenceImageBase64,
-      },
-    });
+  if (args.referenceImages && args.referenceImages.length > 0) {
+    for (const ref of args.referenceImages) {
+      userParts.push({
+        inlineData: {
+          mimeType: ref.mimeType,
+          data: ref.base64,
+        },
+      });
+    }
   }
 
   const response = await generateImageContentWithRetry({
     model: env.geminiImageModel,
     contents: [{ role: 'user', parts: userParts }],
-    config: buildImageConfig({ temperature: args.temperature ?? 1.0 }),
+    config: buildImageConfig({ 
+      temperature: args.temperature ?? 1.0,
+      thinkingLevel: 'high'
+    }),
   }, 'tattoo-surgical-edit');
 
   return extractFirstImage(response);
@@ -407,9 +421,7 @@ export async function runTattooCreativeDelta(args: {
   maskImageBase64?: string | null;
   maskMimeType?: string | null;
   maskType?: 'include' | 'exclude';
-  referenceImageBase64?: string | null;
-
-  referenceMimeType?: string | null;
+  referenceImages?: ReferenceAssetInput[];
   mimeType: string;
   designIdLock: string;
   styleIdLock: string;
@@ -421,12 +433,8 @@ export async function runTattooCreativeDelta(args: {
   transformation: string;
   intensity: 'low' | 'medium' | 'high';
   exclusions?: string | null;
-  referenceDesignIdLock?: string | null;
-  referenceStyleIdLock?: string | null;
   transferInstruction?: string | null;
   transferMode?: 'none' | 'reference_transfer' | 'locked_reference_transfer';
-  designFidelity?: number;
-  detailLoad?: number;
   symmetryLock?: boolean;
   tattooMode?: boolean;
   temperature?: number;
@@ -434,6 +442,7 @@ export async function runTattooCreativeDelta(args: {
   const prompt = TATTOO_PHASE_1C.buildPrompt({
     ...args,
     maskMode: args.maskImageBase64 ? 'provided' : 'none',
+    references: args.referenceImages ?? [],
   });
 
   const parts: any[] = [
@@ -456,13 +465,15 @@ export async function runTattooCreativeDelta(args: {
   }
 
 
-  if (args.referenceImageBase64) {
-    parts.push({
-      inlineData: {
-        mimeType: args.mimeType,
-        data: args.referenceImageBase64,
-      },
-    });
+  if (args.referenceImages && args.referenceImages.length > 0) {
+    for (const ref of args.referenceImages) {
+      parts.push({
+        inlineData: {
+          mimeType: ref.mimeType,
+          data: ref.base64,
+        },
+      });
+    }
   }
 
   const response = await generateImageContentWithRetry({
@@ -473,7 +484,10 @@ export async function runTattooCreativeDelta(args: {
         parts,
       },
     ],
-    config: buildImageConfig({ temperature: args.temperature ?? 1.0 }),
+    config: buildImageConfig({ 
+      temperature: args.temperature ?? 1.0,
+      thinkingLevel: args.intensity === 'low' ? 'minimal' : 'high'
+    }),
   }, 'tattoo-creative-delta');
 
   return extractFirstImage(response);
@@ -486,6 +500,7 @@ export async function optimizePromptText(args: {
   instruction?: string | null;
   fieldKind?: keyof typeof AI_OPTIMIZE_DEFAULT_INSTRUCTIONS;
   imageUrls?: string[];
+  locks?: string | null;
 }) {
   const baseInstructions = AI_OPTIMIZE_DEFAULT_INSTRUCTIONS[args.fieldKind ?? 'general'];
   const fullInstructions = args.instruction 
@@ -494,7 +509,12 @@ export async function optimizePromptText(args: {
 
   return generatePlainText({
     systemInstruction: fullInstructions,
-    userInstruction: `Optimize this prompt for better AI image generation results:\n\n${args.originalText}`,
+    userInstruction: AI_OPTIMIZE.buildPrompt({
+      originalText: args.originalText,
+      instruction: args.instruction || 'Refine for clarity and intent.',
+      fieldKind: args.fieldKind || 'general',
+      locks: args.locks,
+    }),
     imageUrls: args.imageUrls,
   });
 }

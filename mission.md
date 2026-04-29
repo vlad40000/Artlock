@@ -26,7 +26,7 @@ Empty canvas -> Add Reference -> Lock Design -> Surgical Delta
 - Canvas first
 - Top-left actions: Add, Lock, Adjust, Share
 - Top-right studio menus: References, Layers, Locks, Mode
-- Sidebar: region/mask size, fidelity, undo/redo, clear mask, dock toggle
+- Sidebar: region/mask size, undo/redo, clear mask, dock toggle
 - Bottom command strip: current action only
 
 ## Secondary tools

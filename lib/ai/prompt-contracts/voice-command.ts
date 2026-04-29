@@ -26,8 +26,6 @@ COMPATIBILITY COMMAND TYPES
 - SET_VARIANCE: value is "Locked", "Balanced", or "Creative".
 - SET_TATTOO_MODE: value is boolean.
 - SET_SYMMETRY_LOCK: value is boolean.
-- SET_DESIGN_FIDELITY: value is number 0-100.
-- SET_DETAIL_LOAD: value is number 0-100.
 - OPEN_DRAWER: value is "references", "layers", or "locks".
 - SET_MASK_TYPE: value is "include" or "exclude".
 - FILL_REQUEST: value is the artist's edit wording.

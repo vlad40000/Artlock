@@ -40,13 +40,18 @@ export const AI_OPTIMIZE_DEFAULT_INSTRUCTIONS: Record<OptimizeFieldKind, string>
 
 FIELD FOCUS
 - Improve clarity and visual specificity.
+- Utilize the ACTIVE LOCKS context (if provided) to ensure the refined instruction aligns with the current subject, style, and camera distance.
 - Keep the request compatible with the current Studio edit flow.`,
   surgical_change: `${AI_OPTIMIZE_BASE_PROMPT}
 
 FIELD FOCUS
 - Rewrite the request as one localized surgical change.
-- Make the changed area and unchanged area easier to understand.
-- Avoid wording that implies a full-image restyle.`,
+- Use the ACTIVE LOCKS context to infer the exact TARGET REGION within the current image context.
+- Define a concrete TARGET REGION (smallest visible area).
+- Define a concrete CHANGE (one edit to existing image).
+- Define a PRESERVE list (visible regions to keep locked).
+- MASK MODE SPLIT: If a mask exists, the mask is a hard boundary. If no mask, the target region is the boundary.
+- If the instruction is vague, use the LOCKS to disambiguate intent before returning FAIL_NEEDS_SPECIFIC_TARGET.`,
   surgical_refinement: `${AI_OPTIMIZE_BASE_PROMPT}
 
 FIELD FOCUS
@@ -83,9 +88,13 @@ export const AI_OPTIMIZE = {
     originalText: string;
     instruction: string;
     fieldKind: OptimizeFieldKind;
+    locks?: string | null;
   }) {
     return [
       'FIELD KIND: ' + args.fieldKind,
+      '',
+      'ACTIVE LOCKS CONTEXT:',
+      args.locks || 'None provided.',
       '',
       'OPTIMIZATION INSTRUCTION:',
       args.instruction,

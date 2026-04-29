@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    baseURL: process.env.BASE_URL || 'http://127.0.0.1:3000',
     trace: 'on-first-retry',
   },
   projects: [
@@ -16,10 +16,14 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'ipad',
+      use: { ...devices['iPad Pro 11'] },
+    },
   ],
   webServer: {
     command: 'npm run dev',
-    url: process.env.BASE_URL || 'http://localhost:3000',
+    url: process.env.BASE_URL || 'http://127.0.0.1:3000',
     reuseExistingServer: true,
   },
 });

@@ -10,7 +10,7 @@ test.describe('Artlock Studio', () => {
       {
         name: 'tls_session',
         value: TEST_AUTH_TOKEN,
-        domain: 'localhost',
+        domain: '127.0.0.1',
         path: '/',
       },
     ]);

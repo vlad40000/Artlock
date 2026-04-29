@@ -12,12 +12,23 @@ MISSION
 - Preserve the exact composition and silhouette of the base image.
 - Isolate the structural "blueprint" of the design.
 
+STENCIL PRIORITY ORDER
+- Preserve the approved design identity.
+- Preserve major silhouette and readable line structure.
+- Preserve tattoo-readable internal detail.
+- Convert shading into stencil-safe linework, stipple, or clean black/white separation.
+- Remove non-design artifacts.
+- Keep transfer usability higher priority than microscopic detail.
+
 STENCIL RULES - ABSOLUTE
 - Background: Solid white (#FFFFFF).
 - Lines: Solid black (#000000).
 - No midtones: Only binary black and white.
 - No shading: No whip shading, no gradients, no grey-wash simulations.
 - No texture: No paper texture, no skin texture, no brush jitter.
+- No background texture or environment artifacts.
+- Keep line paths clear and printable.
+- Preserve intentional negative space.
 
 LINE HIERARCHY
 - Outlines: Bold, continuous, and closed.
@@ -29,7 +40,7 @@ FAIL CONDITIONS
 - Presence of any color or grey shading.
 - Broken or incomplete outlines.
 - Addition of new design elements.
-- Loss of design fidelity or silhouette anchors.
+- Loss of identity lock or silhouette anchors.
 
 OUTPUT
 - A single high-contrast black and white linework image.

@@ -18,10 +18,9 @@ const bodySchema = z.object({
   exclusions: z.string().max(500).optional().nullable(),
   baseAssetId: z.string().uuid().optional().nullable(),
   referenceAssetId: z.string().uuid().optional().nullable(),
+  referenceAssetIds: z.array(z.string().uuid()).optional(),
   transferInstruction: z.string().max(700).optional().nullable(),
   transferMode: z.enum(['none', 'reference_transfer', 'locked_reference_transfer']).optional().default('none'),
-  designFidelity: z.number().min(0).max(1).optional(),
-  detailLoad: z.number().min(0).max(1).optional(),
   symmetryLock: z.boolean().optional(),
   tattooMode: z.boolean().optional(),
   generationPresetId: z.string().max(50).optional(),
@@ -72,15 +71,32 @@ export async function POST(
     }
 
     const baseLock = detail.locks.find((l) => l.source_asset_id === baseAsset.id) ?? lock;
+    
+    // Handle multiple reference assets
+    const referenceAssetIds = [
+      ...(body.referenceAssetId ? [body.referenceAssetId] : []),
+      ...(body.referenceAssetIds ?? []),
+    ];
+    const uniqueReferenceAssetIds = Array.from(new Set(referenceAssetIds));
 
-    const referenceAsset = resolveSessionAsset(detail, body.referenceAssetId);
-    const referenceLock = referenceAsset
-      ? (detail.locks.find((lock) => lock.source_asset_id === referenceAsset.id) ?? null)
-      : null;
-    const transferMode = referenceAsset ? body.transferMode : 'none';
+    const referenceImages = await Promise.all(
+      uniqueReferenceAssetIds.map(async (id) => {
+        const asset = resolveSessionAsset(detail, id);
+        if (!asset) return null;
+        const lock = detail.locks.find((l) => l.source_asset_id === asset.id) ?? null;
+        const downloaded = await downloadAssetAsBase64(asset.blob_url);
+        return {
+          base64: downloaded.base64,
+          mimeType: asset.mime_type || downloaded.mimeType,
+          designIdLock: lock?.design_id_lock ?? null,
+          styleIdLock: lock?.style_id_lock ?? null,
+        };
+      }),
+    ).then((results) => results.filter((r): r is NonNullable<typeof r> => r !== null));
+
+    const transferMode = referenceImages.length > 0 ? body.transferMode : 'none';
 
     const sourceImage = await downloadAssetAsBase64(baseAsset.blob_url);
-    const referenceImage = referenceAsset ? await downloadAssetAsBase64(referenceAsset.blob_url) : null;
 
     let maskAsset = null;
     if (body.maskAssetId) {
@@ -114,17 +130,12 @@ export async function POST(
       transformation: body.transformation,
       intensity: body.intensity,
       exclusions: body.exclusions,
-      referenceImageBase64: referenceImage?.base64 ?? null,
-      referenceMimeType: referenceAsset?.mime_type || referenceImage?.mimeType || null,
-      referenceDesignIdLock: referenceLock?.design_id_lock ?? null,
-      referenceStyleIdLock: referenceLock?.style_id_lock ?? null,
+      referenceImages: referenceImages,
       transferInstruction: body.transferInstruction ?? null,
       transferMode,
       maskImageBase64: maskImage?.base64 ?? null,
       maskMimeType: maskAsset?.mime_type ?? maskImage?.mimeType ?? null,
       maskType: body.maskType,
-      designFidelity: body.designFidelity,
-      detailLoad: body.detailLoad,
       symmetryLock: body.symmetryLock,
       tattooMode: body.tattooMode,
       temperature: profile.temperature,

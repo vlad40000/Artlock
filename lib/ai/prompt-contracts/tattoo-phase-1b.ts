@@ -8,9 +8,10 @@ TOOL ROUTING - HARD
 - If preservation rules cannot be met exactly: FAIL.
 
 MISSION
-- Apply one bounded, localized edit.
-- Preserve the base image lineage.
-- Change only the requested target and nothing else.
+- Apply ONLY the specified localized DELTA to the EXISTING base image.
+- Preserve all non-target content exactly in identity, layout, and style.
+- Modify ONLY the target region.
+- If strict preservation cannot be honored: FAIL.
 
 SOURCE OF TRUTH - STRICT ORDER
 1) Base image
@@ -28,12 +29,21 @@ CANVAS LOCK - ABSOLUTE
 - Resolution: unchanged.
 - Framing: unchanged.
 - Orientation: unchanged.
-- No crop.
-- No resize.
-- No padding.
-- No zoom.
-- No perspective shift.
-- No hidden recomposition.
+- No crop, no resize, no padding, no zoom, no perspective shift.
+- No hidden recomposition or restaging.
+
+LOCALIZATION CONTRACT - REQUIRED
+- Before generation, the target must be known.
+- If TARGET REGION is ambiguous, under-change rather than over-change.
+- Modify only the specified region.
+- Do not make cleanup edits or beautification passes outside the requested area.
+- Do not redesign untouched regions.
+
+MASK LOCK (If provided)
+- A mask is a hard, pixel-perfect boundary.
+- Only the included mask area may change.
+- Any change outside the masked region is forbidden.
+- If the request cannot be completed fully inside the mask: FAIL.
 
 EDIT SHAPE
 - Default to one surgical delta per pass.
@@ -111,15 +121,15 @@ export const TATTOO_PHASE_1B = {
     compositionIdLock: string;
     tattooIdLock: string;
     placementIdLock: string;
-    referenceDesignIdLock?: string | null;
-    referenceStyleIdLock?: string | null;
+    references?: {
+      designIdLock?: string | null;
+      styleIdLock?: string | null;
+    }[];
     referenceAssistMode?: 'none' | 'reference_assist' | 'locked_reference_assist';
     delta1: string;
     delta2?: string | null;
     maskMode?: 'provided' | 'none';
     regionHint?: string | null;
-    designFidelity?: number;
-    detailLoad?: number;
     symmetryLock?: boolean;
     tattooMode?: boolean;
     maskType?: 'include' | 'exclude';
@@ -128,8 +138,6 @@ export const TATTOO_PHASE_1B = {
     const delta2 = args.delta2?.trim() ? args.delta2.trim() : 'None';
     const regionHint = args.regionHint?.trim() ? args.regionHint.trim() : '[X]';
     const referenceAssistMode = args.referenceAssistMode ?? 'none';
-    const fidelity = args.designFidelity !== undefined ? Math.round(args.designFidelity * 100) : 100;
-    const detail = args.detailLoad !== undefined ? Math.round(args.detailLoad * 100) : 100;
     const symmetry = args.symmetryLock ? 'ENABLED' : 'DISABLED';
     const maskType = args.maskType ?? 'include';
 
@@ -143,18 +151,24 @@ export const TATTOO_PHASE_1B = {
     }
 
     const referenceGuidance =
-      referenceAssistMode === 'none'
+      referenceAssistMode === 'none' || !args.references || args.references.length === 0
         ? ''
         : [
-            'REFERENCE ASSIST IMAGE: [Reference Image]',
+            'REFERENCE ASSIST IMAGES:',
+            ...args.references.map((ref, i) => {
+              const label = i === 0 ? '[Reference Image]' : `[Reference Image #${i + 1}]`;
+              return [
+                `${label}:`,
+                ref.designIdLock ?? '[Design ID unavailable]',
+                ref.styleIdLock ?? '[Style ID unavailable]',
+              ].join('\n');
+            }),
             '',
             'REFERENCE ASSIST POLICY:',
             '- Mode: ' + referenceAssistMode,
-            '- Use the reference only to support the requested delta.',
-            '- Do not replace the base image identity, layout, style, camera, or composition with the reference.',
-            '- Borrow only explicitly relevant traits.',
-            args.referenceDesignIdLock ?? '[Reference DESIGN ID lock unavailable]',
-            args.referenceStyleIdLock ?? '[Reference STYLE ID lock unavailable]',
+            '- Use the reference assets only to support the requested delta.',
+            '- Do not replace the base image identity, layout, style, camera, or composition with references.',
+            '- Borrow only explicitly relevant traits from the provided reference set.',
           ].join('\n');
 
     return [
@@ -165,6 +179,13 @@ export const TATTOO_PHASE_1B = {
       '- Mask handling: ' + maskLine,
       '- Target region: ' + regionHint,
       referenceGuidance || null,
+      '',
+      'LOCALIZATION CONTRACT — REQUIRED',
+      'Before generation, the target must be known.',
+      'If no valid target exists (e.g. [X], none, null), output FAIL.',
+      'This is a surgical edit, not a new image request.',
+      'Rewrite the DELTA internally as an edit to the existing image.',
+      'The model must not interpret the DELTA as a new portrait or a full redraw.',
       '',
       'ACTIVE LOCKSET - VERBATIM:',
       args.designIdLock,
@@ -178,22 +199,16 @@ export const TATTOO_PHASE_1B = {
       'DELTA CONTRACT:',
       'DELTA #1: ' + delta1,
       'DELTA #2: ' + delta2,
-      'STRUCTURE DELTA: none',
-      '',
-      'LOCALIZATION RULES:',
-      '- Restrict all meaningful changes to the intended target region.',
-      '- Keep everything outside the target unchanged in identity, layout, and style.',
-      '- If target boundaries are ambiguous, prefer under-changing to over-changing.',
+      'Everything outside the TARGET REGION must remain pixel-faithful in identity and layout.',
+      'Do not reinterpret the portrait.',
       '',
       'CONTROL KNOBS:',
-      '- Design Fidelity: ' + fidelity + '%',
-      '- Detail Load: ' + detail + '%',
       '- Symmetry Lock: ' + symmetry,
       '',
       'PRODUCTION MODE:',
       args.tattooMode === false
-        ? 'TATTOO MODE: OFF. Do not invent tattoo-specific constraints, but still preserve locked identity, camera, composition, and explicit unchanged regions.'
-        : 'TATTOO MODE: ON. Preserve visible tattoo readability and production-safe clarity where the base image and lock text support it.',
+        ? 'TATTOO MODE: OFF. Do not invent tattoo-specific constraints.'
+        : 'TATTOO MODE: ON. Preserve visible tattoo readability and production-safe clarity.',
     ]
       .filter((line): line is string => line !== null)
       .join('\n')

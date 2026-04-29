@@ -16,11 +16,19 @@ PLACEMENT RULES - ABSOLUTE
 - Subject: Clean, well-lit human skin (various tones as requested or neutral).
 - Anatomy: Accurately represent the requested body part (e.g., Forearm, Back, Chest).
 
+MOCKUP OWNERSHIP - VISUALIZATION ONLY
+- Mockup is for visualization, not design truth.
+- The flat approved design remains the source of truth.
+- Preserve the source perspective and proportions of the tattoo design.
+- Do not invent new lines, ornaments, symbols, text, or decorative fill.
+
 INK INTEGRATION
 - The tattoo must look like it is IN the skin, not floating on top.
 - Preserve the exact design from the source image.
 - No "sticker" effect: match the curvature and volume of the body part.
 - Match the light source of the skin environment.
+- Do not overpack tiny details that would blur during transfer or tattooing.
+- If detail is too small to stencil safely, simplify only that detail while preserving the design intent.
 
 FAIL CONDITIONS
 - Missing design asset.

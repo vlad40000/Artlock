@@ -75,14 +75,29 @@ export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProp
     ctx.moveTo(x, y);
   };
 
+  const canvasHasVisibleAlpha = (c: HTMLCanvasElement, threshold = 10) => {
+    const ctx = c.getContext('2d');
+    if (!ctx) return false;
+    const { data } = ctx.getImageData(0, 0, c.width, c.height);
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] > threshold) return true;
+    }
+    return false;
+  };
+
   const stopDrawing = () => {
     setIsDrawing(false);
     const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.toBlob((blob) => {
-        if (blob) onExport(blob);
-      }, 'image/png');
+    if (!canvas) return;
+
+    if (!canvasHasVisibleAlpha(canvas)) {
+      onExport(null as any); // Signal empty mask
+      return;
     }
+
+    canvas.toBlob((blob) => {
+      if (blob) onExport(blob);
+    }, 'image/png');
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
@@ -115,9 +130,7 @@ export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProp
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    canvas.toBlob((blob) => {
-      if (blob) onExport(blob);
-    }, 'image/png');
+    onExport(null as any);
   };
 
   if (!isActive) return null;

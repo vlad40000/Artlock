@@ -172,15 +172,3 @@ export function varianceToIntensity(variance: string): 'low' | 'medium' | 'high'
   }
 }
 
-/**
- * Clamp numeric generation controls to safe server-side ranges.
- */
-export function clampGenerationControls(controls: {
-  designFidelity?: number;
-  detailLoad?: number;
-}) {
-  return {
-    designFidelity: Math.min(1, Math.max(0, controls.designFidelity ?? 0.85)),
-    detailLoad: Math.min(1, Math.max(0, controls.detailLoad ?? 0.65)),
-  };
-}

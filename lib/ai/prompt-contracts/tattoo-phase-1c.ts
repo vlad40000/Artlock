@@ -46,10 +46,15 @@ FORBIDDEN CREATIVE SCOPE
 - Identity replacement.
 - Whole-scene redesign.
 - Unrequested structure invention.
-- Camera drift.
-- Composition drift.
-- Style-family replacement.
-- Broad background reinvention unless explicitly unlocked.
+- Camera drift, composition drift, or style-family replacement.
+- Broad background reinvention.
+- Do not regenerate the subject.
+- Do not rewrite the full image.
+- Do not change camera, crop, scale, background, or style.
+
+PHASE BOUNDARY
+- Creative Delta is not Surgical Edit.
+- If the instruction is a small localized correction, accessory add, cleanup, move, or removal: FAIL_PHASE_MISMATCH (use Surgical Edit).
 
 IDENTITY LOCK - HARD
 - Preserve primary silhouette and subject identity.
@@ -96,6 +101,11 @@ FAIL CONDITIONS
 - Structural drift when not explicitly requested.
 - Unrequested secondary changes.
 
+ALPHA / BACKGROUND LOCK
+- Preserve alpha behavior from the base unless transformation explicitly changes background.
+- Do not add white matte fills.
+- Do not replace transparent or blank backgrounds with paper, white boxes, or gradients.
+
 OUTPUT
 - Return one transformed image.
 - Same canvas as the base image.
@@ -117,12 +127,12 @@ export const TATTOO_PHASE_1C = {
     transformation: string;
     intensity: 'low' | 'medium' | 'high';
     exclusions?: string | null;
-    referenceDesignIdLock?: string | null;
-    referenceStyleIdLock?: string | null;
+    references?: {
+      designIdLock?: string | null;
+      styleIdLock?: string | null;
+    }[];
     transferInstruction?: string | null;
     transferMode?: 'none' | 'reference_transfer' | 'locked_reference_transfer';
-    designFidelity?: number;
-    detailLoad?: number;
     symmetryLock?: boolean;
     tattooMode?: boolean;
     maskMode?: 'provided' | 'none';
@@ -130,8 +140,6 @@ export const TATTOO_PHASE_1C = {
   }) {
     const exclusions = args.exclusions?.trim() ? args.exclusions.trim() : '[X]';
     const transferMode = args.transferMode ?? 'none';
-    const fidelity = args.designFidelity !== undefined ? Math.round(args.designFidelity * 100) : 100;
-    const detail = args.detailLoad !== undefined ? Math.round(args.detailLoad * 100) : 100;
     const symmetry = args.symmetryLock ? 'ENABLED' : 'DISABLED';
     const maskType = args.maskType ?? 'include';
 
@@ -144,18 +152,24 @@ export const TATTOO_PHASE_1C = {
     }
 
     const referenceGuidance =
-      transferMode === 'none'
+      transferMode === 'none' || !args.references || args.references.length === 0
         ? ''
         : [
-            'REFERENCE IMAGE: [Reference Image]',
+            'REFERENCE IMAGES:',
+            ...args.references.map((ref, i) => {
+              const label = i === 0 ? '[Reference Image]' : `[Reference Image #${i + 1}]`;
+              return [
+                `${label}:`,
+                ref.designIdLock ?? '[Design ID unavailable]',
+                ref.styleIdLock ?? '[Style ID unavailable]',
+              ].join('\n');
+            }),
             '',
             'REFERENCE TRANSFER POLICY:',
             '- Transfer mode: ' + transferMode,
-            '- Borrow only the requested reference traits.',
-            '- Do not replace the base image identity, camera, composition, or overall design with the reference.',
-            '- Use the reference as a bounded influence, not a new source image.',
-            args.referenceDesignIdLock ?? '[Reference DESIGN ID lock unavailable]',
-            args.referenceStyleIdLock ?? '[Reference STYLE ID lock unavailable]',
+            '- Borrow only the requested reference traits from the provided set.',
+            '- Do not replace the base image identity, camera, composition, or overall design with references.',
+            '- Use references as bounded influences, not new source images.',
             '- Requested borrowed trait: ' + (args.transferInstruction ?? args.transformation).trim(),
           ].join('\n');
 
@@ -185,8 +199,6 @@ export const TATTOO_PHASE_1C = {
       'CREATIVE CONTROLS:',
       '- Intensity: ' + args.intensity,
       '- Exclusions: ' + exclusions,
-      '- Visual Fidelity: ' + fidelity + '%',
-      '- Detail Load: ' + detail + '%',
       '- Symmetry Lock: ' + symmetry,
       '',
       'PRODUCTION MODE:',

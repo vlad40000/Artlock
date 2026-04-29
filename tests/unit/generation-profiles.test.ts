@@ -3,8 +3,7 @@ import {
   resolveGenerationProfile, 
   resolveFromControls, 
   derivePresetId, 
-  varianceToIntensity,
-  clampGenerationControls
+  varianceToIntensity
 } from '@/lib/ai/generation-profiles';
 
 describe('Generation Profiles Logic', () => {
@@ -74,17 +73,4 @@ describe('Generation Profiles Logic', () => {
     });
   });
 
-  describe('clampGenerationControls', () => {
-    it('should clamp values outside 0-1 range', () => {
-      const clamped = clampGenerationControls({ designFidelity: 1.5, detailLoad: -0.5 });
-      expect(clamped.designFidelity).toBe(1);
-      expect(clamped.detailLoad).toBe(0);
-    });
-
-    it('should use defaults if values are missing', () => {
-      const clamped = clampGenerationControls({});
-      expect(clamped.designFidelity).toBe(0.85);
-      expect(clamped.detailLoad).toBe(0.65);
-    });
-  });
 });

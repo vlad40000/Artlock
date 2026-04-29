@@ -1,0 +1,12 @@
+[2026-04-29T02:19:49.177Z] [INFO] Logger initialized. Writing logs to: c:\Users\bradv\Downloads\Artlock-main (34)\.cortex\logs\cortex-2026-04-29T02-19-49-177Z.log
+[2026-04-29T02:19:49.178Z] [INFO] ═══════════════════════════════════════════════════════════════
+[2026-04-29T02:19:49.178Z] [INFO] 🧠 CORTEX AI SCAN - Análisis Contextual Jerárquico
+[2026-04-29T02:19:49.178Z] [INFO] ═══════════════════════════════════════════════════════════════
+
+[2026-04-29T02:19:49.189Z] [INFO] 🔍 Seleccionando mejor modelo...
+[2026-04-29T02:19:49.652Z] [ERROR] Model selection failed
+{}
+[2026-04-29T02:19:49.653Z] [STACK] Error: No AI provider selected
+    at selectBestModel (c:\Users\bradv\.antigravity\extensions\ecuabyte.cortex-vscode-0.8.2-universal\dist\extension.js:5498:11)
+    at scanProjectWithAI (c:\Users\bradv\.antigravity\extensions\ecuabyte.cortex-vscode-0.8.2-universal\dist\extension.js:5718:20)
+    at c:\Users\bradv\.antigravity\extensions\ecuabyte.cortex-vscode-0.8.2-universal\dist\extension.js:8036:26

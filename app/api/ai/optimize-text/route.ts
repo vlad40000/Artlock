@@ -14,6 +14,7 @@ const bodySchema = z.object({
   instruction: z.string().optional().nullable(),
   fieldKind: z.enum(fieldKinds).optional().default('general'),
   imageUrls: z.array(z.string().url()).optional(),
+  locks: z.string().optional().nullable(),
 });
 
 export async function POST(request: Request) {
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
       instruction: body.instruction,
       fieldKind: body.fieldKind,
       imageUrls: body.imageUrls,
+      locks: body.locks,
     });
 
     return NextResponse.json({

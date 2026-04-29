@@ -38,7 +38,7 @@ export interface SessionDetailRecord {
   session: {
     id: string;
     project_id: string;
-    reference_asset_id: string;
+    reference_asset_id: string | null;
     active_lock_id: string | null;
     latest_approved_asset_id: string | null;
     status: string;

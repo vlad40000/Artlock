@@ -23,9 +23,8 @@ const bodySchema = z.object({
   baseAssetId: z.string().uuid().optional().nullable(),
   maskAssetId: z.string().uuid().optional().nullable(),
   referenceAssetId: z.string().uuid().optional().nullable(),
+  referenceAssetIds: z.array(z.string().uuid()).optional(),
   regionHint: z.string().max(500).optional().nullable(),
-  designFidelity: z.number().min(0).max(1).optional(),
-  detailLoad: z.number().min(0).max(1).optional(),
   symmetryLock: z.boolean().optional(),
   tattooMode: z.boolean().optional(),
   generationPresetId: z.string().max(50).optional(),
@@ -103,13 +102,31 @@ export async function POST(
     const maskImage = maskAsset
       ? await downloadAsset(maskAsset.blob_url)
       : null;
-    const referenceAsset = resolveSessionAsset(detail, body.referenceAssetId);
-    const referenceLock = referenceAsset
-      ? (detail.locks.find((lock) => lock.source_asset_id === referenceAsset.id) ?? null)
-      : null;
-    const referenceImage = referenceAsset
-      ? await downloadAsset(referenceAsset.blob_url)
-      : null;
+    // Handle multiple reference assets
+    const referenceAssetIds = [
+      ...(body.referenceAssetId ? [body.referenceAssetId] : []),
+      ...(body.referenceAssetIds ?? []),
+    ];
+    const uniqueReferenceAssetIds = Array.from(new Set(referenceAssetIds));
+
+    const referenceImages = await Promise.all(
+      uniqueReferenceAssetIds.map(async (id) => {
+        const asset = resolveSessionAsset(detail, id);
+        if (!asset) return null;
+        const lock = detail.locks.find((l) => l.source_asset_id === asset.id) ?? null;
+        const downloaded = await downloadAsset(asset.blob_url);
+        return {
+          base64: downloaded.base64,
+          mimeType: asset.mime_type || downloaded.mimeType,
+          designIdLock: lock?.design_id_lock ?? null,
+          styleIdLock: lock?.style_id_lock ?? null,
+        };
+      }),
+    ).then((results) => results.filter((r): r is NonNullable<typeof r> => r !== null));
+
+    const referenceAssistMode = referenceImages.length > 0 
+      ? (referenceImages.some(r => r.designIdLock) ? 'locked_reference_assist' : 'reference_assist')
+      : 'none';
 
     // Resolve generation profile — server-side temperature/topP
     const profile = resolveFromControls({
@@ -129,18 +146,13 @@ export async function POST(
       compositionIdLock: lock.composition_id_lock,
       tattooIdLock: lock.tattoo_id_lock,
       placementIdLock: lock.placement_id_lock,
-      referenceImageBase64: referenceImage?.base64 ?? null,
-      referenceMimeType: referenceAsset?.mime_type || referenceImage?.mimeType || null,
-      referenceDesignIdLock: referenceLock?.design_id_lock ?? null,
-      referenceStyleIdLock: referenceLock?.style_id_lock ?? null,
-      referenceAssistMode: referenceAsset ? (referenceLock ? 'locked_reference_assist' : 'reference_assist') : 'none',
+      referenceImages: referenceImages,
+      referenceAssistMode: referenceAssistMode,
       delta1: body.delta1,
       delta2: body.delta2,
       regionHint: body.regionHint,
       maskImageBase64: maskImage?.base64 ?? null,
       maskMimeType: maskAsset?.mime_type ?? maskImage?.mimeType ?? null,
-      designFidelity: body.designFidelity,
-      detailLoad: body.detailLoad,
       symmetryLock: body.symmetryLock,
       tattooMode: body.tattooMode,
       maskType: body.maskType,
@@ -177,7 +189,9 @@ export async function POST(
       baseAsset.height &&
       (outputDimensions.width !== baseAsset.width || outputDimensions.height !== baseAsset.height)
     ) {
-      return NextResponse.json({ error: MASK_DRIFT_ERROR_MESSAGE }, { status: 400 });
+      return NextResponse.json({ 
+        error: `Dimension mismatch: Output image (${outputDimensions.width}x${outputDimensions.height}) does not match Base asset (${baseAsset.width}x${baseAsset.height}).` 
+      }, { status: 400 });
     }
 
     driftValidation = {

@@ -23,8 +23,6 @@ interface StudioStore {
   
   // Design Parameters (current working values)
   request: string;
-  fidelity: number;
-  detailLevel: number;
 
   // --- Actions ---
   
@@ -54,11 +52,9 @@ interface StudioStore {
   setBrushSize: (size: number | ((prev: number) => number)) => void;
   setMaskMode: (mode: ('draw' | 'erase') | ((prev: 'draw' | 'erase') => 'draw' | 'erase')) => void;
   setRequest: (request: string | ((prev: string) => string)) => void;
-  setFidelity: (fidelity: number | ((prev: number) => number)) => void;
-  setDetailLevel: (detailLevel: number | ((prev: number) => number)) => void;
   
   // Initialize/Reset
-  resetStore: (initialPiece: PieceState) => void;
+  resetStore: (initialPiece: PieceState, past?: PieceState[], future?: PieceState[]) => void;
 }
 
 const MAX_HISTORY = 50;
@@ -88,8 +84,6 @@ export const useStudioStore = create<StudioStore>((set, get) => ({
   brushSize: 40,
   maskMode: 'draw',
   request: '',
-  fidelity: 60,
-  detailLevel: 70,
 
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,
@@ -170,20 +164,12 @@ export const useStudioStore = create<StudioStore>((set, get) => ({
   setRequest: (update) => set((state) => ({ 
     request: typeof update === 'function' ? (update as any)(state.request) : update 
   })),
-  setFidelity: (update) => set((state) => ({ 
-    fidelity: typeof update === 'function' ? (update as any)(state.fidelity) : update 
-  })),
-  setDetailLevel: (update) => set((state) => ({ 
-    detailLevel: typeof update === 'function' ? (update as any)(state.detailLevel) : update 
-  })),
 
-  resetStore: (initialPiece) => set({
+  resetStore: (initialPiece, past = [], future = []) => set({
     present: initialPiece,
-    past: [],
-    future: [],
+    past,
+    future,
     status: 'Ready',
     request: initialPiece.request || '',
-    fidelity: initialPiece.fidelity || 60,
-    detailLevel: initialPiece.detailLevel || 70,
   }),
 }));

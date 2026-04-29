@@ -52,6 +52,11 @@ export interface Preset {
   isCustom?: boolean;
 }
 
+export interface ReferencePromptParam {
+  title?: string;
+  promptLine?: string;
+}
+
 export interface PieceState {
   id?: string;
   clientId?: string;
@@ -97,8 +102,7 @@ export interface PieceState {
   // Design Parameters (tracked in history)
   request?: string;
   activeReferenceIds?: string[];
-  fidelity?: number;
-  detailLevel?: number;
+  referencePromptParams?: Record<string, ReferencePromptParam>;
 
   deliverables?: Deliverable[];
   presets?: Preset[];

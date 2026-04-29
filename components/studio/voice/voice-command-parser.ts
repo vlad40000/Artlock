@@ -11,8 +11,6 @@ export type VoiceCommandType =
   | 'SET_VARIANCE'
   | 'SET_TATTOO_MODE'
   | 'SET_SYMMETRY_LOCK'
-  | 'SET_DESIGN_FIDELITY'
-  | 'SET_DETAIL_LOAD'
   | 'OPEN_DRAWER'
   | 'FILL_REQUEST'
   | 'SET_MASK_TYPE'
@@ -138,19 +136,7 @@ export function parseVoiceCommand(transcript: string): VoiceCommand {
     return { type: 'SET_SYMMETRY_LOCK', value: false };
   }
 
-  // Fidelity: "set fidelity to 90", "design fidelity 80"
-  const fidelityMatch = lower.match(/(?:design\s+)?fidelity\s+(?:to\s+)?(\d{1,3})/);
-  if (fidelityMatch) {
-    const val = Math.min(100, Math.max(0, Number(fidelityMatch[1])));
-    return { type: 'SET_DESIGN_FIDELITY', value: val };
-  }
 
-  // Detail load: "detail load 70", "set detail to 50"
-  const detailMatch = lower.match(/detail\s*(?:load)?\s+(?:to\s+)?(\d{1,3})/);
-  if (detailMatch) {
-    const val = Math.min(100, Math.max(0, Number(detailMatch[1])));
-    return { type: 'SET_DETAIL_LOAD', value: val };
-  }
 
   // Drawer opens: "open references", "show layers", "locks"
   const drawerMatch = lower.match(/(?:open|show|view)\s+(references?|gallery|layers?|history|outputs|locks?)/);

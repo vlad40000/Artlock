@@ -129,6 +129,14 @@ export async function validateServerMaskDrift(args: {
     baseImage.height === maskImage.height;
 
   if (!dimensionsMatch) {
+    let specificMessage = 'Dimension mismatch: ';
+    if (baseImage.width !== editedImage.width || baseImage.height !== editedImage.height) {
+      specificMessage += `Edited image (${editedImage.width}x${editedImage.height}) does not match Base image (${baseImage.width}x${baseImage.height}). `;
+    }
+    if (baseImage.width !== maskImage.width || baseImage.height !== maskImage.height) {
+      specificMessage += `Mask image (${maskImage.width}x${maskImage.height}) does not match Base image (${baseImage.width}x${baseImage.height}). `;
+    }
+
     return {
       drifted: true,
       dimensionsMatch: false,
@@ -139,7 +147,7 @@ export async function validateServerMaskDrift(args: {
       outsideMaskPixels: 0,
       changedBounds: null,
       outsideMaskBounds: null,
-      message: MASK_DRIFT_ERROR_MESSAGE,
+      message: specificMessage.trim(),
     };
   }
 

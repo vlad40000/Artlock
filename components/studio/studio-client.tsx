@@ -40,6 +40,9 @@ import { Operation, operationAction } from './studio-sidebar';
 import { clientUploadAsset } from '@/lib/client/upload';
 import { MaskCanvas } from './shared/mask-canvas';
 import { TattooQAReport } from '@/lib/ai/prompt-contracts/tattoo-qa';
+import { getSurgicalWarning } from '@/lib/image/surgical-warning';
+import { interpretSurgicalInstruction } from '@/lib/ai/surgical-interpreter';
+import { SurgicalDeltaOverlay } from './shared/surgical-delta-overlay';
 import { useStudioStore } from '@/lib/stores/studio-store';
 import type { PieceState, DesignPhase } from '@/types/domain';
 
@@ -53,28 +56,16 @@ interface StudioClientProps {
   detail?: SessionDetailRecord;
 }
 
-// --- UTILS ---
-function percentToNorm(value: number) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, Math.round(value) / 100));
-}
-
-function normalizeVoicePercent(value: unknown) {
-  const numeric = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(numeric)) return 60;
-  const percent = numeric <= 1 ? numeric * 100 : numeric;
-  return Math.max(0, Math.min(100, Math.round(percent)));
-}
 
 type PersistedStudioClientState = {
   piece?: Partial<PieceState>;
+  past?: Partial<PieceState>[];
+  future?: Partial<PieceState>[];
   operation?: Operation;
   activeDrawer?: string | null;
   brushSize?: number;
   maskMode?: 'draw' | 'erase';
   request?: string;
-  fidelity?: number;
-  detailLevel?: number;
   maskAssetId?: string | null;
   regionHint?: string | null;
   maskType?: 'include' | 'exclude';
@@ -127,6 +118,8 @@ function sanitizePersistedClientState(value: unknown): PersistedStudioClientStat
   if (!isRecord(value)) return {};
 
   const piece = isRecord(value.piece) ? value.piece as Partial<PieceState> : undefined;
+  const past = Array.isArray(value.past) ? value.past.filter(isRecord) as Partial<PieceState>[] : undefined;
+  const future = Array.isArray(value.future) ? value.future.filter(isRecord) as Partial<PieceState>[] : undefined;
   const operation = typeof value.operation === 'string' && OPERATIONS.has(value.operation as Operation)
     ? value.operation as Operation
     : undefined;
@@ -148,13 +141,13 @@ function sanitizePersistedClientState(value: unknown): PersistedStudioClientStat
 
   return {
     piece,
+    past,
+    future,
     operation,
     activeDrawer: optionalString(value.activeDrawer),
     brushSize: optionalPercent(value.brushSize),
     maskMode,
     request: typeof value.request === 'string' ? value.request : undefined,
-    fidelity: optionalPercent(value.fidelity),
-    detailLevel: optionalPercent(value.detailLevel),
     maskAssetId: optionalString(value.maskAssetId),
     regionHint: optionalString(value.regionHint),
     maskType,
@@ -489,7 +482,10 @@ export function StudioClient({ detail }: StudioClientProps) {
     activeDrawer,
     setActiveDrawer,
     present: piece,
+    past: pastPiece,
+    future: futurePiece,
     pushState: pushPiece,
+    updatePresent,
     undo: undoPiece,
     redo: redoPiece,
     resetStore,
@@ -499,10 +495,6 @@ export function StudioClient({ detail }: StudioClientProps) {
     setMaskMode,
     request,
     setRequest,
-    fidelity,
-    setFidelity,
-    detailLevel,
-    setDetailLevel
   } = useStudioStore();
 
   const [message, setMessage] = useState<{ text: string; type: 'info' | 'error' } | null>(null);
@@ -545,8 +537,7 @@ export function StudioClient({ detail }: StudioClientProps) {
       activePhase: persistedClientState.activePhase ?? savedPiece.activePhase ?? (detail?.activeLock ? 'surgical' : 'reference'),
       request: persistedClientState.request ?? savedPiece.request ?? '',
       activeReferenceIds: Array.isArray(savedPiece.activeReferenceIds) ? savedPiece.activeReferenceIds : [],
-      fidelity: persistedClientState.fidelity ?? savedPiece.fidelity ?? 60,
-      detailLevel: persistedClientState.detailLevel ?? savedPiece.detailLevel ?? 70,
+      referencePromptParams: isRecord(savedPiece.referencePromptParams) ? savedPiece.referencePromptParams as PieceState['referencePromptParams'] : {},
       maskAssetId: persistedClientState.maskAssetId ?? savedPiece.maskAssetId ?? null,
       regionHint: persistedClientState.regionHint ?? savedPiece.regionHint ?? null,
       maskType: persistedClientState.maskType ?? savedPiece.maskType ?? 'include'
@@ -561,7 +552,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   // Initialize store on mount
   useEffect(() => {
     if (!isMounted.current) {
-      resetStore(initialPiece);
+      resetStore(initialPiece, persistedClientState.past as any, persistedClientState.future as any);
       setOperation(persistedClientState.operation ?? (initialPiece.activePhase === 'surgical' ? 'Surgical' : 'Extract'));
       setActiveDrawer(persistedClientState.activeDrawer ?? null);
       setBrushSize(persistedClientState.brushSize ?? 40);
@@ -578,9 +569,8 @@ export function StudioClient({ detail }: StudioClientProps) {
         ...initialPiece,
         activePhase: current.activePhase ?? initialPiece.activePhase,
         activeReferenceIds: current.activeReferenceIds,
+        referencePromptParams: current.referencePromptParams ?? initialPiece.referencePromptParams,
         request: current.request ?? initialPiece.request,
-        fidelity: current.fidelity ?? initialPiece.fidelity,
-        detailLevel: current.detailLevel ?? initialPiece.detailLevel,
         maskAssetId: current.maskAssetId ?? initialPiece.maskAssetId,
         maskType: current.maskType ?? initialPiece.maskType,
         regionHint: current.regionHint ?? initialPiece.regionHint,
@@ -629,31 +619,45 @@ export function StudioClient({ detail }: StudioClientProps) {
   // Sync history back to local states
   useEffect(() => {
     if (piece.request !== undefined && piece.request !== request) setRequest(piece.request);
-    if (piece.fidelity !== undefined && piece.fidelity !== fidelity) setFidelity(piece.fidelity);
-    if (piece.detailLevel !== undefined && piece.detailLevel !== detailLevel) setDetailLevel(piece.detailLevel);
     if (piece.maskAssetId !== undefined && piece.maskAssetId !== maskAssetId) setMaskAssetId(piece.maskAssetId);
     if (piece.maskType !== undefined && piece.maskType !== maskType) setMaskType(piece.maskType);
     if (piece.regionHint !== undefined && piece.regionHint !== regionHint) setRegionHint(piece.regionHint);
   }, [piece]);
 
+  // Interpret current instruction
+  const surgicalInfo = useMemo(() => {
+    if (operation !== 'Surgical') return null;
+    return interpretSurgicalInstruction(request);
+  }, [request, operation]);
+
+  // Drift validation state (local override for immediate feedback)
+  const [driftError, setDriftError] = useState<string | null>(null);
+
+  const activeSurgicalWarning = useMemo(() => {
+    if (operation !== 'Surgical') return null;
+    return getSurgicalWarning({
+      maskProvided: !!maskAssetId,
+      maskBBoxExists: !!maskAssetId, // Simple check for now
+      targetRegion: surgicalInfo?.targetRegion || regionHint,
+      driftOutsideMask: driftError?.includes('outside mask'),
+      driftOutsideTarget: driftError?.includes('outside target region'),
+    });
+  }, [operation, maskAssetId, surgicalInfo, regionHint, driftError]);
+
   const pushCheckpoint = useCallback(() => {
     pushPiece({
       ...piece,
       request,
-      fidelity,
-      detailLevel,
       maskAssetId,
       maskType,
       regionHint,
     });
-  }, [piece, request, fidelity, detailLevel, maskAssetId, maskType, regionHint, pushPiece]);
+  }, [piece, request, maskAssetId, maskType, regionHint, pushPiece]);
 
   const syncClientState = useMemo(() => ({
     piece: {
       ...piece,
       request,
-      fidelity,
-      detailLevel,
       maskAssetId,
       maskType,
       regionHint,
@@ -663,8 +667,6 @@ export function StudioClient({ detail }: StudioClientProps) {
     brushSize,
     maskMode,
     request,
-    fidelity,
-    detailLevel,
     maskAssetId,
     regionHint,
     maskType,
@@ -673,11 +675,13 @@ export function StudioClient({ detail }: StudioClientProps) {
     dockItems,
     previewAssetId,
     activePhase: piece.activePhase,
+    past: pastPiece,
+    future: futurePiece,
   }), [
     piece,
+    pastPiece,
+    futurePiece,
     request,
-    fidelity,
-    detailLevel,
     maskAssetId,
     maskType,
     regionHint,
@@ -829,18 +833,6 @@ export function StudioClient({ detail }: StudioClientProps) {
         setOperation(command.value as Operation);
         setStatus(`Switched to ${command.value}`);
         break;
-      case 'SET_DESIGN_FIDELITY': {
-        const nextValue = normalizeVoicePercent(command.value);
-        setFidelity(nextValue);
-        setStatus(`AI Fidelity set to ${nextValue}%.`);
-        break;
-      }
-      case 'SET_DETAIL_LOAD': {
-        const nextValue = normalizeVoicePercent(command.value);
-        setDetailLevel(nextValue);
-        setStatus(`Detail Load set to ${nextValue}%.`);
-        break;
-      }
       case 'OPEN_DRAWER':
         setActiveDrawer(command.value as string);
         setStatus(`Opened ${command.value}`);
@@ -919,11 +911,25 @@ export function StudioClient({ detail }: StudioClientProps) {
   const handleEnhancePrompt = async () => {
     if (!request.trim() || busy) return;
     setBusy('REFINING INSTRUCTION');
+    const locksContext = activeLocksList
+      .filter(l => l.value)
+      .map(l => `${l.name}: ${l.value}`)
+      .join('\n');
+
+    const kind: OptimizeFieldKind = 
+      operation === 'Surgical' ? 'surgical_change' : 
+      operation === 'Creative' ? 'creative_delta' : 
+      'general';
+
     try {
       const resp = await fetch('/api/ai/optimize-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ originalText: request.trim(), fieldKind: 'general' }),
+        body: JSON.stringify({ 
+          originalText: request.trim(), 
+          fieldKind: kind,
+          locks: locksContext
+        }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Optimization failed');
@@ -981,10 +987,8 @@ export function StudioClient({ detail }: StudioClientProps) {
     }
 
     const activeReferenceId = piece.activeReferenceIds?.[0] ?? null;
+    const editRequest = buildEditRequest(request);
     const generationPresetId = derivePresetId(operation, DEFAULT_MODE, DEFAULT_VARIANCE);
-    const designFidelity = percentToNorm(fidelity);
-    const detailLoad = percentToNorm(detailLevel);
-
     setBusy(`RUNNING ${operation.toUpperCase()}`);
     try {
       let endpoint = '';
@@ -1000,34 +1004,28 @@ export function StudioClient({ detail }: StudioClientProps) {
           break;
         case 'Surgical':
           endpoint = `/api/sessions/${detail.session.id}/surgical-edit`;
-          body = {
-            delta1: request.trim(),
-            baseAssetId: displayAsset.id,
-            referenceAssetId: activeReferenceId,
-            maskAssetId,
-            regionHint,
-            maskType,
-            designFidelity,
-            detailLoad,
-            symmetryLock: DEFAULT_SYMMETRY_LOCK,
-            tattooMode: DEFAULT_TATTOO_MODE,
-            generationPresetId,
-            variancePreset: DEFAULT_VARIANCE,
-          };
+            body = {
+              delta1: editRequest,
+              baseAssetId: displayAsset.id,
+              referenceAssetId: activeReferenceId,
+              maskAssetId,
+              regionHint: surgicalInfo?.targetRegion || regionHint,
+              maskType,
+              tattooMode: DEFAULT_TATTOO_MODE,
+              generationPresetId,
+              variancePreset: DEFAULT_VARIANCE,
+            };
           break;
         case 'Creative':
           endpoint = `/api/sessions/${detail.session.id}/creative-delta`;
           body = {
-            transformation: request.trim(),
+            transformation: editRequest,
             intensity: varianceToIntensity(DEFAULT_VARIANCE),
             baseAssetId: displayAsset.id,
             referenceAssetId: activeReferenceId,
             transferMode: activeReferenceId ? 'reference_transfer' : 'none',
             maskAssetId,
             maskType,
-            designFidelity,
-            detailLoad,
-            symmetryLock: DEFAULT_SYMMETRY_LOCK,
             tattooMode: DEFAULT_TATTOO_MODE,
             generationPresetId,
             variancePreset: DEFAULT_VARIANCE,
@@ -1047,8 +1045,6 @@ export function StudioClient({ detail }: StudioClientProps) {
           endpoint = `/api/sessions/${detail.session.id}/stencil`;
           body = {
             baseAssetId: displayAsset.id,
-            designFidelity,
-            detailLoad,
           };
           break;
         case 'Mockup':
@@ -1056,8 +1052,6 @@ export function StudioClient({ detail }: StudioClientProps) {
           body = {
             baseAssetId: displayAsset.id,
             placement: 'Forearm',
-            designFidelity,
-            detailLoad,
             tattooMode: DEFAULT_TATTOO_MODE,
           };
           break;
@@ -1070,11 +1064,17 @@ export function StudioClient({ detail }: StudioClientProps) {
       });
 
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Operation failed');
+      if (!resp.ok) {
+        if (data.error?.includes('Drift detected')) {
+          setDriftError(data.error);
+        }
+        throw new Error(data.error || 'Operation failed');
+      }
 
       setRequest('');
       setMessage({ text: `${operationAction(operation)} complete`, type: 'info' });
       setStatus('Ready');
+      setDriftError(null);
       
       if (operation === 'Extract') {
         pushPiece({
@@ -1135,6 +1135,22 @@ export function StudioClient({ detail }: StudioClientProps) {
     } finally {
       setBusy(null);
     }
+  };
+
+  const handleReferencePromptParamChange = (
+    assetId: string,
+    field: 'title' | 'promptLine',
+    value: string,
+  ) => {
+    updatePresent((current) => ({
+      referencePromptParams: {
+        ...(current.referencePromptParams ?? {}),
+        [assetId]: {
+          ...(current.referencePromptParams?.[assetId] ?? {}),
+          [field]: value,
+        },
+      },
+    }));
   };
 
   const handlePromoteToReference = async (assetId: string) => {
@@ -1211,6 +1227,32 @@ export function StudioClient({ detail }: StudioClientProps) {
       default: return 'Execute';
     }
   }, [operation]);
+
+  const isReferenceAssistPhase = activePhaseId === 'surgical' || activePhaseId === 'creative';
+  const referencePromptLines = useMemo(() => {
+    const params = piece.referencePromptParams ?? {};
+    return (piece.activeReferenceIds ?? [])
+      .map((assetId, index) => {
+        const param = params[assetId];
+        const title = param?.title?.trim() || `Ref${index + 1}`;
+        const promptLine = param?.promptLine?.trim();
+        return promptLine ? `${title}: ${promptLine}` : null;
+      })
+      .filter(Boolean) as string[];
+  }, [piece.activeReferenceIds, piece.referencePromptParams]);
+
+  const buildEditRequest = useCallback((baseRequest: string) => {
+    const trimmed = baseRequest.trim();
+    if (referencePromptLines.length === 0) return trimmed;
+
+    return [
+      trimmed,
+      [
+        'Reference parameters:',
+        ...referencePromptLines.map((line) => `- ${line}`),
+      ].join('\n'),
+    ].filter(Boolean).join('\n\n');
+  }, [referencePromptLines]);
 
   const latestEditRun = detail?.editRuns?.[0];
   const isCompletedEditRun = latestEditRun?.status === 'succeeded' || latestEditRun?.status === 'complete';
@@ -1613,6 +1655,134 @@ export function StudioClient({ detail }: StudioClientProps) {
     </aside>
   );
 
+  const renderReferenceAssistHandle = () => {
+    if (!isReferenceAssistPhase) return null;
+
+    const selectedRefs = piece.activeReferenceIds || [];
+    const isOpen = activeDrawer === 'assistRefs';
+
+    return (
+      <button
+        type="button"
+        onClick={() => setActiveDrawer(isOpen ? null : 'assistRefs')}
+        className={`absolute left-5 top-5 z-30 flex h-9 min-w-9 items-center gap-2 rounded-full border px-3 text-[10px] font-black uppercase tracking-[0.16em] shadow-2xl backdrop-blur-2xl transition-all ${
+          isOpen || selectedRefs.length > 0
+            ? 'border-tls-amber bg-tls-amber text-black'
+            : 'border-white/10 bg-white/12 text-white/75 hover:bg-white hover:text-black'
+        }`}
+        title="Reference images for this edit"
+      >
+        <LayoutGrid size={13} />
+        <span>{selectedRefs.length ? `${selectedRefs.length} Refs` : 'Refs'}</span>
+      </button>
+    );
+  };
+
+  const renderReferenceAssistDrawer = () => {
+    if (!isReferenceAssistPhase || activeDrawer !== 'assistRefs') return null;
+
+    const refs = detail?.projectReferences?.length
+      ? detail.projectReferences
+      : detail?.referenceAsset
+        ? [detail.referenceAsset]
+        : [];
+    const activeRefs = piece.activeReferenceIds || [];
+
+    return (
+      <aside className="absolute left-5 top-16 z-30 w-[min(280px,calc(100%-40px))] overflow-hidden rounded-2xl border border-white/10 bg-black/76 shadow-2xl backdrop-blur-2xl">
+        <div className="flex items-start justify-between border-b border-white/10 p-4">
+          <div>
+            <div className="text-[9px] font-black uppercase tracking-[0.22em] text-tls-amber">Reference Assist</div>
+            <div className="mt-1 text-sm font-semibold text-white">Edit References</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveDrawer(null)}
+            className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+            title="Close references"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="max-h-[min(52dvh,420px)] overflow-y-auto p-3 scrollbar-hide">
+          {refs.length === 0 ? (
+            <button
+              type="button"
+              onClick={handleAddReference}
+              className="flex h-28 w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/10 text-white/35 transition-colors hover:border-tls-amber/50 hover:text-tls-amber"
+            >
+              <ImagePlus size={20} />
+              <span className="mt-2 text-[9px] font-black uppercase tracking-[0.18em]">Import Reference</span>
+            </button>
+          ) : (
+            <div className="space-y-2">
+              {refs.map((ref) => {
+                const refIndex = activeRefs.indexOf(ref.id);
+                const isSelected = refIndex !== -1;
+                const promptParam = piece.referencePromptParams?.[ref.id];
+                const title = promptParam?.title ?? (isSelected ? `Ref${refIndex + 1}` : '');
+
+                return (
+                  <div
+                    key={ref.id}
+                    className={`overflow-hidden rounded-xl border transition-all ${
+                      isSelected
+                        ? 'border-tls-amber shadow-[0_0_18px_rgba(251,191,36,0.28)]'
+                        : 'border-white/10 bg-white/[0.05] hover:border-white/35'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateReference(ref.id)}
+                      className="group relative block aspect-[5/3] w-full overflow-hidden text-left"
+                      title={isSelected ? 'Remove edit reference' : 'Use as edit reference'}
+                    >
+                      {ref.blob_url && (
+                        <img
+                          src={ref.blob_url}
+                          className={`absolute inset-0 h-full w-full object-cover transition-all ${isSelected ? 'opacity-100' : 'opacity-62 group-hover:opacity-90 group-hover:scale-105'}`}
+                          alt="Edit reference"
+                        />
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2">
+                        <span className="text-[8px] font-black uppercase tracking-[0.14em] text-white">
+                          {isSelected ? `${title || `Ref${refIndex + 1}`} selected` : 'Use as Ref'}
+                        </span>
+                      </div>
+                      {isSelected && (
+                        <div className="absolute right-2 top-2 rounded bg-tls-amber px-1.5 py-0.5 text-[9px] font-black text-black">
+                          {title || `Ref${refIndex + 1}`}
+                        </div>
+                      )}
+                    </button>
+
+                    {isSelected && (
+                      <div className="space-y-2 border-t border-white/10 bg-black/35 p-2">
+                        <input
+                          value={title}
+                          onChange={(event) => handleReferencePromptParamChange(ref.id, 'title', event.target.value)}
+                          placeholder={`Ref${refIndex + 1}`}
+                          className="h-8 w-full rounded-lg border border-white/10 bg-white/[0.05] px-2 text-[10px] font-black uppercase tracking-[0.14em] text-white outline-none focus:border-tls-amber"
+                        />
+                        <input
+                          value={promptParam?.promptLine ?? ''}
+                          onChange={(event) => handleReferencePromptParamChange(ref.id, 'promptLine', event.target.value)}
+                          placeholder="Prompt line for this reference..."
+                          className="h-8 w-full rounded-lg border border-white/10 bg-white/[0.05] px-2 text-[11px] text-white outline-none placeholder:text-white/25 focus:border-tls-amber"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </aside>
+    );
+  };
+
   return (
     <div className={`tls-shell ${chrome ? 'tls-shell--chrome' : 'tls-shell--clean'} ${activeDrawer ? 'tls-shell--drawer-open' : ''}`}>
       {chrome && renderTopBar()}
@@ -1635,19 +1805,21 @@ export function StudioClient({ detail }: StudioClientProps) {
             renderReferenceWorkspace()
           ) : (
             <div className="relative h-full w-full">
-              <div className="tls-artboard-badge z-20 flex items-center gap-2">
-                {regionHint && (
+              {renderReferenceAssistHandle()}
+              {renderReferenceAssistDrawer()}
+              {regionHint && (
+                <div className="tls-artboard-badge z-20 flex items-center gap-2">
                   <div className="flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded bg-tls-amber text-black text-[8px] font-black animate-tls-slide-in">
                     <span>FOCUS: {regionHint.toUpperCase()}</span>
-                    <button 
+                    <button
                       onClick={() => { setRegionHint(null); setStatus('Target area cleared.'); }}
                       className="hover:scale-110 transition-transform cursor-pointer"
                     >
                       <X size={10} />
                     </button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <div className="absolute inset-0 flex items-center justify-center">
                 {displayAsset?.blob_url ? (
@@ -1666,10 +1838,14 @@ export function StudioClient({ detail }: StudioClientProps) {
 
               {showMask && (
                 <MaskCanvas
-                  width={2048}
-                  height={2048}
+                  width={displayAsset?.width ?? 2048}
+                  height={displayAsset?.height ?? 2048}
                   isActive={showMask}
                   onExport={async (blob) => {
+                    if (!blob) {
+                      setMaskAssetId(null);
+                      return;
+                    }
                     if (!detail?.project.id) return;
                     try {
                       const asset = await clientUploadAsset(blob, detail.project.id, 'mask');
@@ -1680,6 +1856,31 @@ export function StudioClient({ detail }: StudioClientProps) {
                     }
                   }}
                 />
+              )}
+
+              {operation === 'Surgical' && (
+                <SurgicalDeltaOverlay
+                  deltas={piece.surgicalEdits || []}
+                  width={displayAsset?.width || 2048}
+                  height={displayAsset?.height || 2048}
+                  isVisible={true}
+                />
+              )}
+
+              {/* SURGICAL TARGET/WARNING OVERLAY */}
+              {operation === 'Surgical' && (surgicalInfo?.displayRegion || activeSurgicalWarning) && (
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none">
+                  {surgicalInfo?.displayRegion && !activeSurgicalWarning && (
+                    <div className="px-3 py-1 bg-tls-amber/20 backdrop-blur-md border border-tls-amber/30 rounded-full text-[10px] font-black text-tls-amber uppercase tracking-widest animate-tls-slide-down">
+                      Target: {surgicalInfo.displayRegion}
+                    </div>
+                  )}
+                  {activeSurgicalWarning && (
+                    <div className="px-4 py-2 bg-red-950/80 backdrop-blur-xl border border-red-500/40 rounded-xl text-[11px] font-bold text-red-200 shadow-tls-heavy animate-tls-pulse text-center max-w-[280px]">
+                      {activeSurgicalWarning}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -1725,12 +1926,13 @@ export function StudioClient({ detail }: StudioClientProps) {
                       <div className="h-4 w-px bg-white/10 mx-1" />
                       {piece.activeReferenceIds?.map((id, i) => {
                         const ref = detail?.projectReferences?.map((r: any) => r).find((r: any) => r.id === id);
+                        const refTitle = piece.referencePromptParams?.[id]?.title?.trim() || `REF ${i + 1}`;
                         return (
                           <div key={id} className="flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md bg-tls-amber/10 border border-tls-amber/20">
                             <div className="w-3.5 h-3.5 rounded bg-black overflow-hidden border border-tls-amber/30">
                               {ref?.blob_url && <img src={ref.blob_url} className="w-full h-full object-cover" />}
                             </div>
-                            <span className="text-[9px] font-black text-tls-amber">REF {i + 1}</span>
+                            <span className="text-[9px] font-black text-tls-amber">{refTitle}</span>
                             <button 
                               onClick={() => handleUpdateReference(id)}
                               className="text-tls-amber/40 hover:text-tls-amber transition-colors bg-transparent border-0 p-0 cursor-pointer"
