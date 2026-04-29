@@ -1080,6 +1080,12 @@ export function StudioClient({ detail }: StudioClientProps) {
               <div
                 key={url}
                 onClick={() => pushPiece({ baseImage: url })}
+                onDoubleClick={() => {
+                  pushPiece({ baseImage: url });
+                  setActivePhaseId('extract');
+                  setOperation('Extract');
+                  setStatus('Base selected. Entering Lock Extraction.');
+                }}
                 className={`relative group cursor-pointer rounded-2xl overflow-hidden border-2 transition-all duration-500 hover:scale-[1.02] hover:z-10 ${
                   piece.baseImage === url 
                     ? 'border-tls-amber ring-4 ring-tls-amber/20 z-10' 
