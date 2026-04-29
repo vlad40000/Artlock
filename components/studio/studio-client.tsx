@@ -275,10 +275,10 @@ function StudioCommandDock({
       <div 
         onMouseDown={onMouseDown}
         onTouchStart={onTouchStart}
-        className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-[9px] font-black uppercase tracking-[0.08em] text-white/45 cursor-move active:scale-95 transition-transform" 
+        className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-white/45 cursor-move active:scale-95 transition-transform" 
         title="Drag to reposition"
       >
-        {phase.code}
+        <Activity size={16} />
       </div>
 
       {dockItems.map((id, index) => {
@@ -682,15 +682,23 @@ export function StudioClient({ detail }: StudioClientProps) {
   const handleAddReference = () => uploadInputRef.current?.click();
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        await bootstrap(file, {
-          projectId: detail?.project.id,
-          sessionId: detail?.session.id,
-        });
-      } catch (_) {
-      } finally {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      if (files.length === 1) {
+        // Single file legacy bootstrap path
+        const file = files[0];
+        try {
+          await bootstrap(file, {
+            projectId: detail?.project.id,
+            sessionId: detail?.session.id,
+          });
+        } catch (_) {
+        } finally {
+          e.target.value = '';
+        }
+      } else {
+        // Multiple files path
+        await handleBatchUpload(files);
         e.target.value = '';
       }
     }
@@ -1134,20 +1142,10 @@ export function StudioClient({ detail }: StudioClientProps) {
         <button onClick={() => router.push('/')} className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white" title="Go Back">
           <ArrowLeft size={18} />
         </button>
-        <div className="tls-topbar-badge !bg-[#fbbf24] !text-[#211500]">{currentPhase}</div>
         <span className="tls-topbar-title font-black text-white/92 tracking-[0.14em] uppercase">{operationLabel}</span>
       </div>
 
       <div className="flex items-center gap-1">
-        <button className={`tls-topbar-icon ${activeDrawer === 'refs' ? 'active' : ''}`} onClick={() => setActiveDrawer(prev => prev === 'refs' ? null : 'refs')} title="Gallery Board">
-          <LayoutGrid size={16} />
-        </button>
-        <button className={`tls-topbar-icon ${activeDrawer === 'layers' ? 'active' : ''}`} onClick={() => setActiveDrawer(prev => prev === 'layers' ? null : 'layers')} title="Layers Stack">
-          <Layers size={16} />
-        </button>
-        <button className={`tls-topbar-icon ${activeDrawer === 'locks' ? 'active' : ''}`} onClick={() => setActiveDrawer(prev => prev === 'locks' ? null : 'locks')} title="Session Locks">
-          <Lock size={16} />
-        </button>
         <div className="tls-status-dot" />
         <button
           className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white"
@@ -1254,7 +1252,7 @@ export function StudioClient({ detail }: StudioClientProps) {
         <div className="flex justify-between items-start mb-6">
           <div>
             <h2 className="text-[10px] tracking-[0.2em] text-neutral-400 font-bold uppercase">Workflow History</h2>
-            <h1 className="text-xl font-semibold mt-1">Design Layers</h1>
+            <h1 className="text-xl font-semibold mt-1">Design Deltas</h1>
           </div>
           <span className="text-[10px] py-1 px-2 bg-sky-900/30 text-sky-400 border border-sky-500/50 rounded-full font-mono">
             RUN-{detail?.editRuns.length || 0}
@@ -1262,11 +1260,11 @@ export function StudioClient({ detail }: StudioClientProps) {
         </div>
 
         <p className="text-[11px] text-neutral-400 leading-relaxed mb-8">
-          Iterative outputs and generation states. Promote any layer to Reference to continue the loop.
+          Iterative outputs and generation states. Promote any delta to Reference to continue the loop.
         </p>
 
         <div className="flex justify-between items-center mb-4">
-          <span className="text-[10px] tracking-widest text-neutral-500 font-bold uppercase">Output Stack</span>
+          <span className="text-[10px] tracking-widest text-neutral-500 font-bold uppercase">Delta History</span>
           <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/10 text-white border border-white/10 font-bold tracking-wider">
             {detail?.editRuns.length || 0} ITEMS
           </span>
@@ -1375,7 +1373,7 @@ export function StudioClient({ detail }: StudioClientProps) {
 
   return (
     <div className={`tls-shell ${chrome ? 'tls-shell--chrome' : 'tls-shell--clean'} ${activeDrawer ? 'tls-shell--drawer-open' : ''}`}>
-      <input type="file" ref={uploadInputRef} style={{ display: 'none' }} accept="image/*" onChange={onFileChange} />
+      <input type="file" ref={uploadInputRef} style={{ display: 'none' }} accept="image/*" multiple onChange={onFileChange} />
 
       {/* CANVAS STAGE */}
       <main 
@@ -1469,7 +1467,6 @@ export function StudioClient({ detail }: StudioClientProps) {
       {chrome && (
         <>
           {renderPhaseSidebar()}
-          {renderTopBar()}
           {activeDrawer === 'locks' && renderLocksDrawer()}
           {activeDrawer === 'layers' && renderLayersDrawer()}
           {activeDrawer === 'refs' && renderRefsDrawer()}

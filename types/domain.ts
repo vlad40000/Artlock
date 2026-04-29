@@ -2,6 +2,7 @@ export type DesignPhase =
   | 'reference'
   | 'extract'
   | 'surgical'
+  | 'creative'
   | 'variants'
   | 'stencil'
   | 'marketing'

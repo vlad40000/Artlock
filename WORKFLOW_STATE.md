@@ -1,6 +1,9 @@
 # WORKFLOW_STATE.md
 
 ## Current Status
+### ⚠️ CRITICAL: READ PRODUCT_TRUTH.md FIRST
+Every agent session MUST start by reading [PRODUCT_TRUTH.md](file:///c:/Users/bradv/Downloads/Artlock-main (34)/Artlock-main/PRODUCT_TRUTH.md). No architectural or UI decisions should be made that conflict with the principles defined in that document.
+
 - **Server-Side Mask Drift Protection**: Hardened the protection pipeline. Fixed a logical inversion where clamping was masking AI drift from validation. Improved mask detection to handle solid alpha channels and added diagnostic logging for "CLEANED" vs "REJECTED" states.
 - **Hybrid Semantic Masking**: Successfully pivoted from manual-only painting to a hybrid model. Users can now use voice ("mask the forearm") to define focus areas (Semantic Region Hinting).
 - **Tablet & Gesture Hardening**:
