@@ -264,7 +264,18 @@ function StudioCommandDock({
   onToggleMask?: () => void;
 }) {
   const [isConfiguring, setIsConfiguring] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState<number | null>(null);
   const phase = PHASES.find((item) => item.id === activePhase) || PHASES[0];
+  const openDockControlsLeft = viewportWidth === null || dockPosition.x > viewportWidth / 2;
+  const dockPopoverSideClass = openDockControlsLeft ? "right-[58px]" : "left-[58px]";
+  const dockTooltipSideClass = openDockControlsLeft ? "right-[58px]" : "left-[58px]";
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth);
+    updateViewportWidth();
+    window.addEventListener('resize', updateViewportWidth);
+    return () => window.removeEventListener('resize', updateViewportWidth);
+  }, []);
 
   const ALL_ACTIONS: Record<string, { label: string; icon: string }> = {
     menu: { label: "Quick Menu", icon: "▦" },
@@ -400,14 +411,14 @@ function StudioCommandDock({
               <span>{item.icon}</span>
               
               {!isConfiguring && (
-                <span className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100">
+                <span className={`pointer-events-none absolute ${dockTooltipSideClass} top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100`}>
                   {item.label}
                 </span>
               )}
             </button>
 
             {isConfiguring && (
-              <div className="absolute left-[58px] top-1/2 -translate-y-1/2 flex gap-1 p-1 rounded-xl bg-black/80 border border-white/10 backdrop-blur-xl z-[60] shadow-2xl">
+              <div className={`absolute ${dockPopoverSideClass} top-1/2 -translate-y-1/2 flex gap-1 p-1 rounded-xl bg-black/80 border border-white/10 backdrop-blur-xl z-[60] shadow-2xl`}>
                 {Object.keys(ALL_ACTIONS).map(actionId => (
                   <button
                     key={actionId}
@@ -437,7 +448,7 @@ function StudioCommandDock({
         }`}
       >
         <span>▶</span>
-        <span className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100">
+        <span className={`pointer-events-none absolute ${dockTooltipSideClass} top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100`}>
           {canRun ? "Run" : "Read Only"}
         </span>
       </button>
