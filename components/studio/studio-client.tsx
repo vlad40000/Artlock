@@ -986,7 +986,7 @@ export function StudioClient({ detail }: StudioClientProps) {
       return;
     }
 
-    const activeReferenceId = piece.activeReferenceIds?.[0] ?? null;
+    const referenceAssetIds = piece.activeReferenceIds ?? [];
     const editRequest = buildEditRequest(request);
     const generationPresetId = derivePresetId(operation, DEFAULT_MODE, DEFAULT_VARIANCE);
     setBusy(`RUNNING ${operation.toUpperCase()}`);
@@ -1007,7 +1007,7 @@ export function StudioClient({ detail }: StudioClientProps) {
             body = {
               delta1: editRequest,
               baseAssetId: displayAsset.id,
-              referenceAssetId: activeReferenceId,
+              referenceAssetIds,
               maskAssetId,
               regionHint: surgicalInfo?.targetRegion || regionHint,
               maskType,
@@ -1022,8 +1022,8 @@ export function StudioClient({ detail }: StudioClientProps) {
             transformation: editRequest,
             intensity: varianceToIntensity(DEFAULT_VARIANCE),
             baseAssetId: displayAsset.id,
-            referenceAssetId: activeReferenceId,
-            transferMode: activeReferenceId ? 'reference_transfer' : 'none',
+            referenceAssetIds,
+            transferMode: referenceAssetIds.length > 0 ? 'reference_transfer' : 'none',
             maskAssetId,
             maskType,
             tattooMode: DEFAULT_TATTOO_MODE,

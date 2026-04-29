@@ -124,10 +124,6 @@ export async function POST(
       }),
     ).then((results) => results.filter((r): r is NonNullable<typeof r> => r !== null));
 
-    const referenceAssistMode = referenceImages.length > 0 
-      ? (referenceImages.some(r => r.designIdLock) ? 'locked_reference_assist' : 'reference_assist')
-      : 'none';
-
     // Resolve generation profile — server-side temperature/topP
     const profile = resolveFromControls({
       operation: 'surgical',
@@ -147,7 +143,6 @@ export async function POST(
       tattooIdLock: lock.tattoo_id_lock,
       placementIdLock: lock.placement_id_lock,
       referenceImages: referenceImages,
-      referenceAssistMode: referenceAssistMode,
       delta1: body.delta1,
       delta2: body.delta2,
       regionHint: body.regionHint,

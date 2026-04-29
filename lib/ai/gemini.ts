@@ -368,10 +368,15 @@ export async function runTattooSurgicalEdit(args: {
   temperature?: number;
 }) {
 
+  const referenceAssistMode = (args.referenceImages && args.referenceImages.length > 0)
+    ? (args.referenceImages.some(r => r.designIdLock) ? 'locked_reference_assist' : 'reference_assist')
+    : 'none';
+
   const prompt = TATTOO_PHASE_1B.buildPrompt({
     ...args,
     maskMode: args.maskImageBase64 ? 'provided' : 'none',
     references: args.referenceImages ?? [],
+    referenceAssistMode,
   });
 
   const userParts: any[] = [
