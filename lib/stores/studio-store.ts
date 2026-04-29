@@ -67,8 +67,15 @@ export const useStudioStore = create<StudioStore>((set, get) => ({
   // Initial State
   present: {
     referenceImages: [],
+    baseImage: null,
+    designId: null,
+    styleId: null,
+    lockArtifacts: null,
+    lockedImage: null,
     editLayers: [],
     variants: [],
+    stencil: null,
+    skinMockup: null,
     activePhase: 'reference',
   } as PieceState,
   past: [],
