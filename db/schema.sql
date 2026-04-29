@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS design_sessions (
   active_lock_id UUID, -- Will be set after lock extraction
   latest_approved_asset_id UUID REFERENCES assets(id),
   status TEXT DEFAULT 'active',
+  client_state JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

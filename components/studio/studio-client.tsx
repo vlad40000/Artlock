@@ -66,6 +66,106 @@ function normalizeVoicePercent(value: unknown) {
   return Math.max(0, Math.min(100, Math.round(percent)));
 }
 
+type PersistedStudioClientState = {
+  piece?: Partial<PieceState>;
+  operation?: Operation;
+  activeDrawer?: string | null;
+  brushSize?: number;
+  maskMode?: 'draw' | 'erase';
+  request?: string;
+  fidelity?: number;
+  detailLevel?: number;
+  maskAssetId?: string | null;
+  regionHint?: string | null;
+  maskType?: 'include' | 'exclude';
+  showMask?: boolean;
+  dockPosition?: { x: number; y: number };
+  dockItems?: string[];
+  activePhase?: DesignPhase;
+  previewAssetId?: string | null;
+};
+
+const DESIGN_PHASES = new Set<DesignPhase>([
+  'reference',
+  'extract',
+  'surgical',
+  'creative',
+  'variants',
+  'stencil',
+  'marketing',
+  'mockup',
+]);
+
+const OPERATIONS = new Set<Operation>([
+  'Extract',
+  'Surgical',
+  'Creative',
+  'Variant',
+  'Stencil',
+  'Mockup',
+  'Turnaround',
+  'QA',
+]);
+
+const DOCK_ACTIONS = new Set(['menu', 'locks', 'refs', 'layers', 'qa', 'export', 'relock', 'mask', 'undo', 'redo']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function optionalString(value: unknown): string | null | undefined {
+  return typeof value === 'string' ? value : value === null ? null : undefined;
+}
+
+function optionalPercent(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(100, value))
+    : undefined;
+}
+
+function sanitizePersistedClientState(value: unknown): PersistedStudioClientState {
+  if (!isRecord(value)) return {};
+
+  const piece = isRecord(value.piece) ? value.piece as Partial<PieceState> : undefined;
+  const operation = typeof value.operation === 'string' && OPERATIONS.has(value.operation as Operation)
+    ? value.operation as Operation
+    : undefined;
+  const maskMode = value.maskMode === 'draw' || value.maskMode === 'erase' ? value.maskMode : undefined;
+  const maskType = value.maskType === 'include' || value.maskType === 'exclude' ? value.maskType : undefined;
+  const activePhase = typeof value.activePhase === 'string' && DESIGN_PHASES.has(value.activePhase as DesignPhase)
+    ? value.activePhase as DesignPhase
+    : undefined;
+  const dockPosition = isRecord(value.dockPosition)
+    && typeof value.dockPosition.x === 'number'
+    && typeof value.dockPosition.y === 'number'
+    && Number.isFinite(value.dockPosition.x)
+    && Number.isFinite(value.dockPosition.y)
+      ? { x: value.dockPosition.x, y: value.dockPosition.y }
+      : undefined;
+  const dockItems = Array.isArray(value.dockItems)
+    ? value.dockItems.filter((item): item is string => typeof item === 'string' && DOCK_ACTIONS.has(item)).slice(0, 8)
+    : undefined;
+
+  return {
+    piece,
+    operation,
+    activeDrawer: optionalString(value.activeDrawer),
+    brushSize: optionalPercent(value.brushSize),
+    maskMode,
+    request: typeof value.request === 'string' ? value.request : undefined,
+    fidelity: optionalPercent(value.fidelity),
+    detailLevel: optionalPercent(value.detailLevel),
+    maskAssetId: optionalString(value.maskAssetId),
+    regionHint: optionalString(value.regionHint),
+    maskType,
+    showMask: typeof value.showMask === 'boolean' ? value.showMask : undefined,
+    dockPosition,
+    dockItems,
+    activePhase,
+    previewAssetId: optionalString(value.previewAssetId),
+  };
+}
+
 // --- SUB-COMPONENTS ---
 
 function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "green" | "amber" | "red" | "blue" }) {
@@ -100,7 +200,7 @@ function IconButton({ children, active, onClick, title }: { children: React.Reac
 
 const PHASES: { id: DesignPhase; code: string; label: string; kind: string; op: string; icon: React.ReactNode }[] = [
   { id: "reference", code: "REF", label: "Reference Board", kind: "intake", op: "Extract", icon: <ImagePlus size={16} /> },
-  { id: "extract", code: "LOCK", label: "Lock Extraction", kind: "read", op: "Extract", icon: <ShieldCheck size={16} /> },
+  { id: "extract", code: "LOCK", label: "Locks Extraction", kind: "read", op: "Extract", icon: <ShieldCheck size={16} /> },
   { id: "surgical", code: "SRG", label: "Surgical Delta", kind: "edit", op: "Surgical", icon: <Activity size={16} /> },
   { id: "creative", code: "CRT", label: "Creative Pivot", kind: "edit", op: "Creative", icon: <Sparkles size={16} /> },
   { id: "variants", code: "VAR", label: "Variants", kind: "build", op: "Variant", icon: <Layers size={16} /> },
@@ -360,6 +460,10 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [canvasScale, setCanvasScale] = useState(1);
   const [canvasRotation, setCanvasRotation] = useState(0);
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
+  const persistedClientState = useMemo(
+    () => sanitizePersistedClientState(detail?.session.client_state),
+    [detail?.session.client_state],
+  );
 
   // UI State from Global Store
   const {
@@ -393,18 +497,19 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [message, setMessage] = useState<{ text: string; type: 'info' | 'error' } | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showQuickMenu, setShowQuickMenu] = useState(false);
-  const [showMask, setShowMask] = useState(false);
+  const [showMask, setShowMask] = useState(() => persistedClientState.showMask ?? false);
   const [showLockDetails, setShowLockDetails] = useState<string | null>(null);
-  const [maskAssetId, setMaskAssetId] = useState<string | null>(null);
-  const [regionHint, setRegionHint] = useState<string | null>(null);
-  const [maskType, setMaskType] = useState<'include' | 'exclude'>('include');
-  const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
+  const [maskAssetId, setMaskAssetId] = useState<string | null>(() => persistedClientState.maskAssetId ?? null);
+  const [regionHint, setRegionHint] = useState<string | null>(() => persistedClientState.regionHint ?? null);
+  const [maskType, setMaskType] = useState<'include' | 'exclude'>(() => persistedClientState.maskType ?? 'include');
+  const [previewAssetId, setPreviewAssetId] = useState<string | null>(() => persistedClientState.previewAssetId ?? null);
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
-  const [dockPosition, setDockPosition] = useState({ x: 1400, y: 400 });
-  const [dockItems, setDockItems] = useState(['menu', 'locks', 'refs', 'layers', 'undo', 'redo']);
+  const [dockPosition, setDockPosition] = useState(() => persistedClientState.dockPosition ?? { x: 1400, y: 400 });
+  const [dockItems, setDockItems] = useState(() => persistedClientState.dockItems?.length ? persistedClientState.dockItems : ['menu', 'locks', 'refs', 'layers', 'undo', 'redo']);
 
   // Piece State & History
   const initialPiece: PieceState = useMemo(() => {
+    const savedPiece = persistedClientState.piece ?? {};
     const referenceImages = detail?.projectReferences?.length
       ? detail.projectReferences.map((asset) => asset.blob_url)
       : detail?.referenceAsset
@@ -415,36 +520,47 @@ export function StudioClient({ detail }: StudioClientProps) {
       id: detail?.project?.id,
       clientId: detail?.project?.id, // Fallback
       referenceImages,
-      baseImage: detail?.referenceAsset?.blob_url || null,
-      designId: detail?.activeLock?.design_id_lock || null,
-      styleId: detail?.activeLock?.style_id_lock || null,
-      lockArtifacts: null,
-      lockedImage: detail?.referenceAsset?.blob_url || null,
+      baseImage: detail?.latestApprovedAsset?.blob_url ?? savedPiece.baseImage ?? detail?.referenceAsset?.blob_url ?? null,
+      designId: detail?.activeLock?.design_id_lock ?? savedPiece.designId ?? null,
+      styleId: detail?.activeLock?.style_id_lock ?? savedPiece.styleId ?? null,
+      lockArtifacts: savedPiece.lockArtifacts ?? null,
+      lockedImage: detail?.latestApprovedAsset?.blob_url ?? savedPiece.lockedImage ?? detail?.referenceAsset?.blob_url ?? null,
       locksExtracted: !!detail?.activeLock,
       locksActive: !!detail?.activeLock,
-      editLayers: [],
-      variants: [],
-      stencil: null,
-      skinMockup: null,
-      activePhase: detail?.activeLock ? 'surgical' : 'reference',
-      request,
-      fidelity,
-      detailLevel,
-      maskType
+      editLayers: Array.isArray(savedPiece.editLayers) ? savedPiece.editLayers : [],
+      variants: Array.isArray(savedPiece.variants) ? savedPiece.variants : [],
+      stencil: savedPiece.stencil ?? null,
+      skinMockup: savedPiece.skinMockup ?? null,
+      activePhase: persistedClientState.activePhase ?? savedPiece.activePhase ?? (detail?.activeLock ? 'surgical' : 'reference'),
+      request: persistedClientState.request ?? savedPiece.request ?? '',
+      activeReferenceIds: Array.isArray(savedPiece.activeReferenceIds) ? savedPiece.activeReferenceIds : [],
+      fidelity: persistedClientState.fidelity ?? savedPiece.fidelity ?? 60,
+      detailLevel: persistedClientState.detailLevel ?? savedPiece.detailLevel ?? 70,
+      maskAssetId: persistedClientState.maskAssetId ?? savedPiece.maskAssetId ?? null,
+      regionHint: persistedClientState.regionHint ?? savedPiece.regionHint ?? null,
+      maskType: persistedClientState.maskType ?? savedPiece.maskType ?? 'include'
     };
-  }, [detail]);
+  }, [detail, persistedClientState]);
 
   const isMounted = useRef(false);
+  const lastSavedClientStateRef = useRef<string | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [storeHydrated, setStoreHydrated] = useState(false);
 
   // Initialize store on mount
   useEffect(() => {
     if (!isMounted.current) {
       resetStore(initialPiece);
+      setOperation(persistedClientState.operation ?? (initialPiece.activePhase === 'surgical' ? 'Surgical' : 'Extract'));
+      setActiveDrawer(persistedClientState.activeDrawer ?? null);
+      setBrushSize(persistedClientState.brushSize ?? 40);
+      setMaskMode(persistedClientState.maskMode ?? 'draw');
       isMounted.current = true;
       // Position dock on the right
-      if (typeof window !== 'undefined') {
+      if (!persistedClientState.dockPosition && typeof window !== 'undefined') {
         setDockPosition({ x: window.innerWidth - 80, y: 400 });
       }
+      setStoreHydrated(true);
     } else {
       const current = useStudioStore.getState().present;
       useStudioStore.getState().updatePresent({
@@ -458,8 +574,9 @@ export function StudioClient({ detail }: StudioClientProps) {
         maskType: current.maskType ?? initialPiece.maskType,
         regionHint: current.regionHint ?? initialPiece.regionHint,
       });
+      setStoreHydrated(true);
     }
-  }, [initialPiece, resetStore]);
+  }, [initialPiece, persistedClientState, resetStore, setActiveDrawer, setBrushSize, setMaskMode, setOperation]);
 
   // Deprecated: useHistory is being phased out in favor of useStudioStore
   // const { ... } = useHistory<PieceState>(initialPiece, 100);
@@ -520,6 +637,85 @@ export function StudioClient({ detail }: StudioClientProps) {
     });
   }, [piece, request, fidelity, detailLevel, maskAssetId, maskType, regionHint, pushPiece]);
 
+  const syncClientState = useMemo(() => ({
+    piece: {
+      ...piece,
+      request,
+      fidelity,
+      detailLevel,
+      maskAssetId,
+      maskType,
+      regionHint,
+    },
+    operation,
+    activeDrawer,
+    brushSize,
+    maskMode,
+    request,
+    fidelity,
+    detailLevel,
+    maskAssetId,
+    regionHint,
+    maskType,
+    showMask,
+    dockPosition,
+    dockItems,
+    previewAssetId,
+    activePhase: piece.activePhase,
+  }), [
+    piece,
+    request,
+    fidelity,
+    detailLevel,
+    maskAssetId,
+    maskType,
+    regionHint,
+    operation,
+    activeDrawer,
+    brushSize,
+    maskMode,
+    showMask,
+    dockPosition,
+    dockItems,
+    previewAssetId,
+  ]);
+
+  useEffect(() => {
+    if (!detail?.session.id || !storeHydrated) return;
+
+    const serialized = JSON.stringify(syncClientState);
+    if (lastSavedClientStateRef.current === null) {
+      lastSavedClientStateRef.current = serialized;
+      return;
+    }
+
+    if (lastSavedClientStateRef.current === serialized) return;
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      lastSavedClientStateRef.current = serialized;
+      fetch(`/api/sessions/${detail.session.id}/sync`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...syncClientState,
+          updatedAt: new Date().toISOString(),
+        }),
+      }).catch((error) => {
+        console.warn('[studio-sync] failed to persist client state', error);
+      });
+    }, 900);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [detail?.session.id, storeHydrated, syncClientState]);
+
   const canvasTransformStyle = useMemo<React.CSSProperties>(() => ({
     transform: `translate(-50%, -50%) translate(${Math.round(canvasPan.x)}px, ${Math.round(canvasPan.y)}px) scale(${canvasScale}) rotate(${canvasRotation}deg)`,
     transformOrigin: 'center center',
@@ -529,7 +725,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   const operationLabel = useMemo(() => {
     switch (operation) {
       case 'Extract': return 'Extract Locks';
-      case 'Surgical': return 'Localized Edit';
+      case 'Surgical': return 'Surgical Edit';
       case 'Creative': return 'Creative Delta';
       case 'Variant': return 'Variant Sheet';
       case 'Stencil': return 'Stencil Export';
@@ -1112,7 +1308,7 @@ export function StudioClient({ detail }: StudioClientProps) {
                     activePhase: 'extract',
                   });
                   setOperation('Extract');
-                  setStatus('Base selected. Entering Lock Extraction.');
+                  setStatus('Base selected. Entering Locks Extraction.');
                 }}
                 className={`relative group cursor-pointer rounded-2xl overflow-hidden border-2 transition-all duration-500 hover:scale-[1.02] hover:z-10 ${
                   piece.baseImage === url 
@@ -1214,8 +1410,8 @@ export function StudioClient({ detail }: StudioClientProps) {
         <div className="tls-drawer-header">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h2 className="text-[10px] tracking-[0.2em] text-neutral-400 font-bold uppercase">DNA audit</h2>
-              <h1 className="text-xl font-semibold mt-1">Source Locks</h1>
+              <h2 className="text-[10px] tracking-[0.2em] text-neutral-400 font-bold uppercase">Locks</h2>
+              <h1 className="text-xl font-semibold mt-1">Extraction</h1>
             </div>
             <span className="text-[10px] py-1 px-2 bg-green-900/30 text-green-400 border border-green-500/50 rounded-full font-mono">{activePhaseId.toUpperCase()}</span>
           </div>
@@ -1227,7 +1423,7 @@ export function StudioClient({ detail }: StudioClientProps) {
           </p>
 
           <div className="flex justify-between items-center mb-4">
-            <span className="text-[10px] tracking-widest text-neutral-500 font-bold uppercase">Design Structure</span>
+            <span className="text-[10px] tracking-widest text-neutral-500 font-bold uppercase">Locks Extracted</span>
             <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold tracking-wider ${locked ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-yellow-600/20 text-yellow-500 border border-yellow-600/50'}`}>
               {locked ? "LOCKED" : "DRAFT"}
             </span>
