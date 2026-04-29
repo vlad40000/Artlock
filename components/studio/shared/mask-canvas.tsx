@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Eraser, Paintbrush, Trash2 } from 'lucide-react';
+import { useStudioStore } from '@/lib/stores/studio-store';
 
 interface MaskCanvasProps {
   width: number;
@@ -13,8 +14,13 @@ interface MaskCanvasProps {
 export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [brushSize, setBrushSize] = useState(40);
-  const [mode, setMode] = useState<'draw' | 'erase'>('draw');
+  
+  const { 
+    brushSize, 
+    maskMode, 
+    setBrushSize, 
+    setMaskMode 
+  } = useStudioStore();
 
   // Initialize canvas
   useEffect(() => {
@@ -92,7 +98,7 @@ export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProp
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
-    if (mode === 'draw') {
+    if (maskMode === 'draw') {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = 'white'; 
     } else {
@@ -143,18 +149,18 @@ export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProp
       {/* MASK CONTROLS */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-tls-panel-heavy backdrop-blur-tls-32 border border-tls-border px-4 py-2 rounded-2xl shadow-tls-heavy animate-tls-slide-up pointer-events-auto">
         <button 
-          onClick={() => setMode('draw')}
-          className={`p-2 rounded-lg transition-colors ${mode === 'draw' ? 'bg-tls-amber text-black' : 'text-white/40 hover:bg-white/10'}`}
+          onClick={() => setMaskMode('draw')}
+          className={`p-4 rounded-lg transition-colors ${maskMode === 'draw' ? 'bg-tls-amber text-black' : 'text-white/40 hover:bg-white/10'}`}
           title="Paint Mask"
         >
-          <Paintbrush size={18} />
+          <Paintbrush size={24} />
         </button>
         <button 
-          onClick={() => setMode('erase')}
-          className={`p-2 rounded-lg transition-colors ${mode === 'erase' ? 'bg-tls-amber text-black' : 'text-white/40 hover:bg-white/10'}`}
+          onClick={() => setMaskMode('erase')}
+          className={`p-4 rounded-lg transition-colors ${maskMode === 'erase' ? 'bg-tls-amber text-black' : 'text-white/40 hover:bg-white/10'}`}
           title="Erase Mask"
         >
-          <Eraser size={18} />
+          <Eraser size={24} />
         </button>
         <div className="w-px h-6 bg-white/10 mx-1" />
         <input 
@@ -163,15 +169,15 @@ export function MaskCanvas({ width, height, onExport, isActive }: MaskCanvasProp
           max="100" 
           value={brushSize} 
           onChange={(e) => setBrushSize(parseInt(e.target.value))}
-          className="w-24 accent-tls-amber"
+          className="w-24 accent-tls-amber h-10"
         />
         <div className="w-px h-6 bg-white/10 mx-1" />
         <button 
           onClick={handleClear}
-          className="p-2 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+          className="p-3 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
           title="Clear Mask"
         >
-          <Trash2 size={18} />
+          <Trash2 size={20} />
         </button>
       </div>
     </div>

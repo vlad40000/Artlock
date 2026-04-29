@@ -37,9 +37,12 @@ import { useStudioVoice } from './voice/use-studio-voice';
 import type { VoiceCommand } from './voice/voice-command-parser';
 import { useCanvasGestures } from '@/hooks/useCanvasGestures';
 import { Operation, operationAction } from './studio-sidebar';
-import type { TattooQAReport } from '@/lib/ai/prompt-contracts/tattoo-qa';
-import { MaskCanvas } from './shared/mask-canvas';
 import { clientUploadAsset } from '@/lib/client/upload';
+import { ReferenceBoard } from './shared/reference-board';
+import { MaskCanvas } from './shared/mask-canvas';
+import { TattooQAReport } from '@/lib/ai/prompt-contracts/tattoo-qa';
+import { useStudioStore } from '@/lib/stores/studio-store';
+import type { PieceState, DesignPhase } from '@/types/domain';
 
 // --- CONFIG ---
 const DEFAULT_MODE = 'Surgical Local';
@@ -96,16 +99,13 @@ function IconButton({ children, active, onClick, title }: { children: React.Reac
   );
 }
 
-const PHASES = [
-  { id: "core-0", code: "REF", label: "Reference Board", kind: "intake", op: "Extract" },
-  { id: "core-1a", code: "LOCK", label: "Lock Extraction", kind: "read", op: "Extract" },
-  { id: "core-1b", code: "BASE", label: "Initial Lock", kind: "build", op: "Surgical" },
-  { id: "core-1c", code: "SRG", label: "Surgical Delta", kind: "edit", op: "Surgical" },
-  { id: "core-1d", code: "PVT", label: "Creative Delta", kind: "delta", op: "Creative" },
-  { id: "tat-2", code: "TURN", label: "Turnaround", kind: "edit", op: "Turnaround" },
-  { id: "tat-3", code: "STNC", label: "Stencil", kind: "build", op: "Stencil" },
-  { id: "tat-4", code: "VAR", label: "Variants", kind: "build", op: "Variant" },
-  { id: "tat-5", code: "MOCK", label: "Mockup", kind: "mock", op: "Mockup" },
+const PHASES: { id: DesignPhase; code: string; label: string; kind: string; op: string }[] = [
+  { id: "reference", code: "REF", label: "Reference Board", kind: "intake", op: "Extract" },
+  { id: "extract", code: "LOCK", label: "Lock Extraction", kind: "read", op: "Extract" },
+  { id: "surgical", code: "SRG", label: "Surgical Delta", kind: "edit", op: "Surgical" },
+  { id: "variants", code: "VAR", label: "Variants", kind: "build", op: "Variant" },
+  { id: "stencil", code: "STNC", label: "Stencil", kind: "build", op: "Stencil" },
+  { id: "mockup", code: "MOCK", label: "Mockup", kind: "mock", op: "Mockup" },
 ];
 
 function RadialNode({ label, icon, angle, radius, primary, onClick }: { label: string; icon: React.ReactNode; angle: number; radius: number; primary?: boolean; onClick: () => void }) {
@@ -175,11 +175,11 @@ function StudioCommandDock({
     export: { label: "Export", icon: "⤓" },
     relock: { label: "Sync Lock", icon: "🔃" },
     mask: { label: "Area", icon: "🎯" },
+    undo: { label: "Undo", icon: "⎌" },
+    redo: { label: "Redo", icon: "⎍" },
   };
 
-  const canRun =
-    phase.kind !== "intake" &&
-    phase.kind !== "read";
+  const canRun = phase.id !== "reference";
 
   const toggleDrawer = (drawer: string) => {
     setActiveDrawer((prev) => (prev === drawer ? null : drawer));
@@ -196,6 +196,8 @@ function StudioCommandDock({
       case 'export': onOpenExport?.(); break;
       case 'relock': onRelock?.(); break;
       case 'mask': onToggleMask?.(); break;
+      case 'undo': useStudioStore.getState().undo(); break;
+      case 'redo': useStudioStore.getState().redo(); break;
       default: toggleDrawer(id);
     }
   };
@@ -359,13 +361,37 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [canvasRotation, setCanvasRotation] = useState(0);
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
 
-  // UI State
-  const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
-  const [showLockDetails, setShowLockDetails] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  // UI State from Global Store
+  const {
+    busy,
+    setBusy,
+    status,
+    setStatus,
+    chrome,
+    setChrome,
+    operation,
+    setOperation,
+    activeDrawer,
+    setActiveDrawer,
+    present: piece,
+    pushState: pushPiece,
+    undo: undoPiece,
+    redo: redoPiece,
+    resetStore,
+    brushSize,
+    setBrushSize,
+    maskMode,
+    setMaskMode,
+    request,
+    setRequest,
+    fidelity,
+    setFidelity,
+    detailLevel,
+    setDetailLevel
+  } = useStudioStore();
+
   const [message, setMessage] = useState<{ text: string; type: 'info' | 'error' } | null>(null);
-  const [chrome, setChrome] = useState(true);
-  const [activePhaseId, setActivePhaseId] = useState('core-1c');
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [showMask, setShowMask] = useState(false);
   const [maskAssetId, setMaskAssetId] = useState<string | null>(null);
@@ -374,8 +400,101 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
   const [dockPosition, setDockPosition] = useState({ x: 16, y: 400 });
-  const [dockItems, setDockItems] = useState(['menu', 'locks', 'refs', 'layers']);
-  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [dockItems, setDockItems] = useState(['menu', 'locks', 'refs', 'layers', 'undo', 'redo']);
+
+  // Piece State & History
+  const initialPiece: PieceState = useMemo(() => {
+    return {
+      id: detail?.project?.id,
+      clientId: detail?.project?.id, // Fallback
+      referenceImages: detail?.referenceAsset ? [detail.referenceAsset.blob_url] : [],
+      baseImage: detail?.referenceAsset?.blob_url || null,
+      designId: detail?.activeLock?.design_id_lock || null,
+      styleId: detail?.activeLock?.style_id_lock || null,
+      lockArtifacts: null,
+      lockedImage: detail?.referenceAsset?.blob_url || null,
+      locksExtracted: !!detail?.activeLock,
+      locksActive: !!detail?.activeLock,
+      editLayers: [],
+      variants: [],
+      stencil: null,
+      skinMockup: null,
+      activePhase: 'reference',
+      request,
+      fidelity,
+      detailLevel,
+      maskType
+    };
+  }, [detail]);
+
+  const isMounted = useRef(false);
+
+  // Initialize store on mount
+  useEffect(() => {
+    if (!isMounted.current) {
+      resetStore(initialPiece);
+      isMounted.current = true;
+    } else {
+      // On Subsequent updates (like router.refresh), we just update the 'present'
+      // without clearing the 'past'/'future' history.
+      useStudioStore.getState().updatePresent(initialPiece);
+    }
+  }, [initialPiece, resetStore]);
+
+  // Deprecated: useHistory is being phased out in favor of useStudioStore
+  // const { ... } = useHistory<PieceState>(initialPiece, 100);
+
+  // Workflow Gates
+  const gates = useMemo(() => {
+    const isReferenceDone = piece.referenceImages.length > 0 || !!piece.designSurfaceDocument;
+    const isBaseSelected = !!piece.baseImage;
+    const isLocked = !!piece.locksActive;
+
+    return {
+      reference: { status: 'open', unmet: [] },
+      extract: { 
+        status: isBaseSelected ? 'open' : 'locked', 
+        unmet: isBaseSelected ? [] : [{ key: 'base', label: 'Select a Base Image' }] 
+      },
+      surgical: { 
+        status: isLocked ? 'open' : 'locked', 
+        unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] 
+      },
+      variants: { status: isLocked ? 'open' : 'locked', unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] },
+      stencil: { status: isLocked ? 'open' : 'locked', unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] },
+      mockup: { status: isLocked ? 'open' : 'locked', unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] },
+      marketing: { status: isLocked ? 'open' : 'locked', unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] },
+    };
+  }, [piece]);
+
+  const activePhaseId = piece.activePhase || 'reference';
+  const setActivePhaseId = (phase: DesignPhase) => {
+    if (gates[phase].status === 'open') {
+      pushPiece({ ...piece, activePhase: phase });
+    }
+  };
+
+  // Sync history back to local states
+  useEffect(() => {
+    if (piece.request !== undefined && piece.request !== request) setRequest(piece.request);
+    if (piece.fidelity !== undefined && piece.fidelity !== fidelity) setFidelity(piece.fidelity);
+    if (piece.detailLevel !== undefined && piece.detailLevel !== detailLevel) setDetailLevel(piece.detailLevel);
+    if (piece.maskAssetId !== undefined && piece.maskAssetId !== maskAssetId) setMaskAssetId(piece.maskAssetId);
+    if (piece.maskType !== undefined && piece.maskType !== maskType) setMaskType(piece.maskType);
+    if (piece.regionHint !== undefined && piece.regionHint !== regionHint) setRegionHint(piece.regionHint);
+  }, [piece]);
+
+  const pushCheckpoint = useCallback(() => {
+    pushPiece({
+      ...piece,
+      request,
+      fidelity,
+      detailLevel,
+      maskAssetId,
+      maskType,
+      regionHint,
+    });
+  }, [piece, request, fidelity, detailLevel, maskAssetId, maskType, regionHint, pushPiece]);
 
   const canvasTransformStyle = useMemo<React.CSSProperties>(() => ({
     transform: `translate(-50%, -50%) translate(${Math.round(canvasPan.x)}px, ${Math.round(canvasPan.y)}px) scale(${canvasScale}) rotate(${canvasRotation}deg)`,
@@ -405,9 +524,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   };
 
   // Control State
-  const [operation, setOperation] = useState<Operation>(
-    detail?.activeLock ? 'Surgical' : 'Extract'
-  );
+  // Operation and other UI states are now managed by the global store.
 
   const operationLabel = useMemo(() => {
     switch (operation) {
@@ -424,18 +541,32 @@ export function StudioClient({ detail }: StudioClientProps) {
   const currentPhase = useMemo(() => {
     return PHASES.find(p => p.id === activePhaseId)?.code || 'STUDIO';
   }, [activePhaseId]);
-  const [request, setRequest] = useState('');
-  const [status, setStatus] = useState('Ready');
-  const [fidelity, setFidelity] = useState(60);
-  const [detailLevel, setDetailLevel] = useState(70);
 
-  const { bootstrap, isBootstrapping, error: bootstrapError, clearError } = useStudioBootstrap();
+
+  const { bootstrap, batchUpload, isBootstrapping, error: bootstrapError, clearError } = useStudioBootstrap();
 
   const resetCanvasView = useCallback(() => {
     setCanvasScale(1);
     setCanvasPan({ x: 0, y: 0 });
     setCanvasRotation(0);
     setStatus('Canvas snapped to fit.');
+  }, []);
+
+  const handleToggleFullscreen = useCallback(() => {
+    setChrome((prev) => !prev);
+    setActiveDrawer(null);
+    
+    try {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+        setStatus('Full-screen mode enabled.');
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen();
+        setStatus('Full-screen mode disabled.');
+      }
+    } catch (e) {
+      console.warn('Fullscreen API error:', e);
+    }
   }, []);
 
   useCanvasGestures(
@@ -445,13 +576,20 @@ export function StudioClient({ detail }: StudioClientProps) {
       onZoom: setCanvasScale,
       onPan: setCanvasPan,
       onRotate: setCanvasRotation,
+      onToggleFullScreen: handleToggleFullscreen,
       onUndo: () => {
-        setStatus('Undo gesture received. History stack wiring pending.');
-        setMessage({ text: 'Undo gesture', type: 'info' });
+        const prev = undoPiece();
+        if (prev) {
+          setStatus('Undo executed.');
+          setMessage({ text: 'Undo', type: 'info' });
+        }
       },
       onRedo: () => {
-        setStatus('Redo gesture received. History stack wiring pending.');
-        setMessage({ text: 'Redo gesture', type: 'info' });
+        const next = redoPiece();
+        if (next) {
+          setStatus('Redo executed.');
+          setMessage({ text: 'Redo', type: 'info' });
+        }
       },
       onLongPress: () => {
         setStatus('Color picker gesture received. Eyedropper UI pending.');
@@ -463,16 +601,30 @@ export function StudioClient({ detail }: StudioClientProps) {
         setMessage({ text: 'Copy/Paste menu gesture', type: 'info' });
       },
       onClearLayer: () => {
-        setStatus('Clear-layer scrub received. Destructive clear is blocked until undo checkpoint wiring exists.');
-        setMessage({ text: 'Clear layer blocked until undo checkpoint exists', type: 'info' });
-      },
-      onToggleFullScreen: () => {
-        setChrome((prev) => !prev);
-        setActiveDrawer(null);
-        setStatus('Full-screen canvas toggled.');
+        pushCheckpoint(); // Save current state before clearing
+        setRequest('');
+        setMaskAssetId(null);
+        setRegionHint(null);
+        setShowMask(false);
+        setStatus('Layer cleared.');
+        setMessage({ text: 'Layer Cleared (Scrub)', type: 'info' });
+        
+        // Push the cleared state as a new checkpoint after a tiny delay
+        setTimeout(() => {
+          pushPiece({
+            ...piece,
+            request: '',
+            maskAssetId: null,
+            regionHint: null,
+          });
+        }, 50);
       },
     },
   );
+
+
+
+
 
   // --- Voice Setup ---
   const handleVoiceCommand = useCallback((command: VoiceCommand) => {
@@ -577,10 +729,39 @@ export function StudioClient({ detail }: StudioClientProps) {
     }
   };
 
+  const handleBatchUpload = async (files: FileList) => {
+    if (!piece.id) return;
+    setBusy('UPLOADING REFERENCES');
+    try {
+      const fileArray = Array.from(files);
+      const newAssetIds = await batchUpload(fileArray, piece.id);
+      
+      // Update local state with temporary blob URLs for immediate preview if needed,
+      // but bootstrap/batchUpload usually refreshes the server state.
+      // For now, we'll rely on the refresh but add the new images to piece state.
+      const newUrls = fileArray.map(f => URL.createObjectURL(f));
+      pushPiece({
+        ...piece,
+        referenceImages: [...newUrls, ...piece.referenceImages]
+      });
+      
+      setMessage({ text: `${files.length} references uploaded`, type: 'info' });
+    } catch (err: any) {
+      setMessage({ text: err.message, type: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleRun = async () => {
     if (!detail?.session.id || !detail?.project.id) return;
 
-    // Extraction specific flow
+    // Check phase gate
+    if (gates[activePhaseId].status === 'locked') {
+      setMessage({ text: `Phase locked: ${gates[activePhaseId].unmet[0].label}`, type: 'error' });
+      return;
+    }
+
     if (operation === 'Extract') {
       if (!detail.referenceAsset) {
         setStatus('Add a reference image first.');
@@ -669,6 +850,16 @@ export function StudioClient({ detail }: StudioClientProps) {
       setRequest('');
       setMessage({ text: `${operationAction(operation)} complete`, type: 'info' });
       setStatus('Ready');
+      
+      // If the API returns a result asset, push it to history
+      if (data.artifacts?.outputAsset) {
+        pushPiece({
+          ...piece,
+          baseImage: data.artifacts.outputAsset.blob_url,
+          lastUpdate: new Date().toISOString()
+        });
+      }
+
       router.refresh();
       setPreviewAssetId(null);
     } catch (err: any) {
@@ -868,18 +1059,24 @@ export function StudioClient({ detail }: StudioClientProps) {
       </div>
 
       <nav className="tls-phase-track">
-        {PHASES.map((p) => (
-          <div
-            key={p.id}
-            className={`tls-phase-tab ${activePhaseId === p.id ? 'active' : ''}`}
-            onClick={() => {
-              setActivePhaseId(p.id);
-              setOperation(p.op as Operation);
-            }}
-          >
-            {p.code}
-          </div>
-        ))}
+        {PHASES.map((p) => {
+          const isLocked = gates[p.id].status === 'locked';
+          return (
+            <div
+              key={p.id}
+              className={`tls-phase-tab flex items-center gap-1.5 transition-all ${activePhaseId === p.id ? 'active' : ''} ${isLocked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/5'}`}
+              onClick={() => {
+                if (!isLocked) {
+                  setActivePhaseId(p.id);
+                  setOperation(p.op as Operation);
+                }
+              }}
+            >
+              {isLocked && <Lock size={10} className="text-white/40" />}
+              <span>{p.code}</span>
+            </div>
+          );
+        })}
       </nav>
 
       <div className="flex items-center gap-1">
@@ -896,10 +1093,11 @@ export function StudioClient({ detail }: StudioClientProps) {
         <button
           className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white"
           onClick={() => {
+            handleToggleFullscreen();
             setChrome(false);
             setActiveDrawer(null);
           }}
-          title="Clear screen"
+          title="Full Screen Canvas"
         >
           <Maximize size={16} />
         </button>
@@ -1095,11 +1293,12 @@ export function StudioClient({ detail }: StudioClientProps) {
       <input type="file" ref={uploadInputRef} style={{ display: 'none' }} accept="image/*" onChange={onFileChange} />
 
       {/* CANVAS STAGE */}
-      <main ref={canvasGestureRef} className="tls-artboard-frame" style={canvasTransformStyle}>
-        <section
-          onClick={!detail?.referenceAsset ? handleAddReference : undefined}
-          className={`tls-artboard ${!detail?.referenceAsset ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
-        >
+      <main 
+        ref={canvasGestureRef as any} 
+        className="tls-artboard-frame"
+        style={activePhaseId === 'reference' ? {} : canvasTransformStyle}
+      >
+        <section className="tls-artboard relative h-full w-full overflow-hidden bg-tls-artboard">
           {busy && (
             <div className="absolute inset-0 z-50 bg-black/48 backdrop-blur-[12px] flex flex-col items-center justify-center">
               <Loader2 className="w-12 h-12 animate-spin text-tls-amber mb-4" />
@@ -1107,49 +1306,91 @@ export function StudioClient({ detail }: StudioClientProps) {
             </div>
           )}
 
-          {/* Badge */}
-          <div className="tls-artboard-badge flex items-center gap-2">
-            {detail?.latestApprovedAsset?.id === displayAsset?.id ? 'LATEST APPROVED' : 'DRAFT'} / 4096 PX
-            {regionHint && (
-              <div className="flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded bg-tls-amber text-black text-[8px] font-black animate-tls-slide-in">
-                <span>FOCUS: {regionHint.toUpperCase()}</span>
-                <button 
-                  onClick={() => { setRegionHint(null); setStatus('Target area cleared.'); }}
-                  className="hover:scale-110 transition-transform cursor-pointer"
+          {activePhaseId === 'reference' ? (
+            <ReferenceBoard 
+              piece={piece}
+              onUpdatePiece={pushPiece}
+              onNextPhase={() => setActivePhaseId('extract')}
+              onUpload={handleBatchUpload}
+              isUploading={isBootstrapping}
+            />
+          ) : gates[activePhaseId].status === 'locked' ? (
+            <div className="h-full flex items-center justify-center p-12 bg-tls-bg text-center">
+              <div className="max-w-xs animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="w-20 h-20 bg-tls-amber/10 rounded-full flex items-center justify-center mx-auto mb-8">
+                  <Lock className="w-10 h-10 text-tls-amber" />
+                </div>
+                <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-4">Phase Locked</h3>
+                <p className="text-tls-muted text-sm leading-relaxed mb-8">
+                  Complete the following to unlock <span className="text-white font-bold">{PHASES.find(p => p.id === activePhaseId)?.label}</span>:
+                </p>
+                <div className="space-y-3 mb-8">
+                  {gates[activePhaseId].unmet.map((req: { label: string }, i: number) => (
+                    <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-tls-surface border border-tls-border-soft">
+                      <div className="w-2 h-2 rounded-full bg-tls-amber" />
+                      <span className="text-[10px] font-black text-tls-text uppercase tracking-widest">{req.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setActivePhaseId('reference')}
+                  className="px-6 py-3 bg-white text-black rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-tls-amber shadow-lg"
                 >
-                  <X size={10} />
+                  Return to Requirements
                 </button>
               </div>
-            )}
-          </div>
-
-          <div className="absolute inset-0 flex items-center justify-center">
-            {displayAsset?.blob_url ? (
-              <img src={displayAsset.blob_url} className={`w-full h-full object-contain ${operation === 'Mockup' ? '' : 'mix-blend-multiply opacity-90 p-12'}`} alt="Design" />
-            ) : (
-              <div className="flex flex-col items-center justify-center text-black/10 pointer-events-none">
-                <Upload size={32} strokeWidth={1.5} className="mb-4" />
-                <span className="text-[10px] font-black tracking-[0.2em] uppercase opacity-40">Click to upload reference</span>
+            </div>
+          ) : (
+            <div className="relative h-full w-full">
+              {/* Badge */}
+              <div className="tls-artboard-badge z-20 flex items-center gap-2">
+                {detail?.latestApprovedAsset?.id === displayAsset?.id ? 'LATEST APPROVED' : 'DRAFT'} / 4096 PX
+                {regionHint && (
+                  <div className="flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded bg-tls-amber text-black text-[8px] font-black animate-tls-slide-in">
+                    <span>FOCUS: {regionHint.toUpperCase()}</span>
+                    <button 
+                      onClick={() => { setRegionHint(null); setStatus('Target area cleared.'); }}
+                      className="hover:scale-110 transition-transform cursor-pointer"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {showMask && (
-            <MaskCanvas
-              width={2048}
-              height={2048}
-              isActive={showMask}
-              onExport={async (blob) => {
-                if (!detail?.project.id) return;
-                try {
-                  const asset = await clientUploadAsset(blob, detail.project.id, 'mask');
-                  setMaskAssetId(asset.id);
-                  setStatus('Mask updated.');
-                } catch (err) {
-                  setStatus('Mask upload failed.');
-                }
-              }}
-            />
+              <div className="absolute inset-0 flex items-center justify-center">
+                {displayAsset?.blob_url ? (
+                  <img 
+                    src={displayAsset.blob_url} 
+                    className={`w-full h-full object-contain ${operation === 'Mockup' ? '' : 'opacity-90 transition-opacity'}`} 
+                    alt="Design" 
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-white/10 pointer-events-none">
+                    <Upload size={32} strokeWidth={1.5} className="mb-4" />
+                    <span className="text-[10px] font-black tracking-[0.2em] uppercase opacity-40">Ready for lock extraction</span>
+                  </div>
+                )}
+              </div>
+
+              {showMask && (
+                <MaskCanvas
+                  width={2048}
+                  height={2048}
+                  isActive={showMask}
+                  onExport={async (blob) => {
+                    if (!detail?.project.id) return;
+                    try {
+                      const asset = await clientUploadAsset(blob, detail.project.id, 'mask');
+                      setMaskAssetId(asset.id);
+                      setStatus('Mask updated.');
+                    } catch (err) {
+                      setStatus('Mask upload failed.');
+                    }
+                  }}
+                />
+              )}
+            </div>
           )}
         </section>
       </main>
@@ -1237,7 +1478,7 @@ export function StudioClient({ detail }: StudioClientProps) {
                 <p className="font-medium text-white/90">{qaReport.summary}</p>
                 {qaReport.findings.length > 0 && (
                   <ul className="space-y-1 pl-1">
-                    {qaReport.findings.map((finding, i) => (
+                    {qaReport.findings.map((finding: string, i: number) => (
                       <li key={i} className="text-white/60 flex gap-2">
                         <span className="text-tls-amber">•</span>
                         <span>{finding}</span>

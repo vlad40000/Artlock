@@ -49,13 +49,13 @@
   --sidebar-ring: oklch(0.708 0 0);
 
   /* Artlock / Tattoo Lock System tokens */
-  --tls-bg: #080807;
+  --tls-bg: #020617; /* Slate 950 */
   --tls-panel: rgba(0, 0, 0, 0.45);
   --tls-panel-heavy: rgba(0, 0, 0, 0.72);
   --tls-surface: rgba(255, 255, 255, 0.06);
   --tls-border: rgba(255, 255, 255, 0.10);
   --tls-border-soft: rgba(255, 255, 255, 0.06);
-  --tls-artboard: #e8dfcf;
+  --tls-artboard: #080807; /* TLS Deep Black */
   --tls-artboard-frame: #15120d;
   --tls-amber: #fbbf24;
   --tls-amber-soft: rgba(251, 191, 36, 0.18);
@@ -181,6 +181,7 @@
     box-sizing: border-box;
     border-color: var(--border);
     outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+    -webkit-tap-highlight-color: transparent;
   }
 
   html,
@@ -321,8 +322,8 @@
   --tls-stage-shift-x: 0px;
   --tls-stage-shift-y: 0px;
   background:
-    radial-gradient(circle at center, #201812 0%, #090807 64%),
-    #080807;
+    radial-gradient(circle at center, #0f172a 0%, #020617 72%),
+    #020617;
   
   /* Ensure a very large pannable surface exists for infinite-pan feeling */
   display: flex;
@@ -384,7 +385,7 @@
     top: 22px;
     left: 18px;
     right: 18px;
-    height: 54px;
+    height: 60px;
     border-radius: 999px;
     z-index: 30;
     display: flex;
@@ -516,9 +517,9 @@
   }
 
   .tls-topbar-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
     display: grid;
     place-items: center;
     background: transparent;
@@ -562,11 +563,11 @@
     width: 100%;
     height: 100%;
     border-radius: 28px;
-    background: #e8dfce;
+    background: var(--tls-artboard);
     overflow: auto; /* Allow scrollbars if contents exceed artboard bounds */
     position: relative;
     scrollbar-width: thin;
-    scrollbar-color: rgba(0,0,0,0.1) transparent;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
   }
 
   .tls-artboard-badge {
@@ -1002,6 +1003,14 @@
     outline-offset: 3px;
   }
 
+  /* Support for larger iPads (iPad Pro 11/12.9) */
+  @media (min-width: 1024px) and (max-width: 1366px) {
+    .tls-artboard-frame {
+      width: min(85vw, 920px);
+      max-height: min(75dvh, 920px);
+    }
+  }
+
   @media (max-width: 1024px) {
     .tls-shell--chrome {
       --tls-stage-left: 84px;
@@ -1083,7 +1092,8 @@
       order: 3;
       flex-basis: 100%;
       min-width: 0;
-      padding: 0;
+      padding: 4px 0;
+      justify-content: center;
     }
 
     .tls-phase-tab {

@@ -57,7 +57,9 @@ function isPixelInsideMask(maskData: Buffer, offset: number) {
     0.587 * maskData[offset + 1] +
     0.114 * maskData[offset + 2];
 
-  return alpha > MASK_THRESHOLD || luma > MASK_THRESHOLD;
+  // Logic: Treat pixel as "inside" ONLY if it is both opaque enough AND bright enough.
+  // This handles grayscale masks with solid alpha correctly (black pixels are excluded).
+  return alpha > MASK_THRESHOLD && luma > MASK_THRESHOLD;
 }
 
 function isPixelAllowedByMask(maskData: Buffer, offset: number, maskType: MaskEditMode) {
@@ -180,6 +182,15 @@ export async function validateServerMaskDrift(args: {
 
   const outsideMaskFraction = outsideMaskPixels / changedPixels;
   const drifted = outsideMaskFraction > DRIFT_TOLERANCE;
+  const DRIFT_WARNING_THRESHOLD = 0.02;
+
+  if (drifted) {
+    console.log(`[mask-drift] REJECTED: changed=${changedPixels}, outside=${outsideMaskPixels}, ratio=${outsideMaskFraction.toFixed(4)}`);
+  } else if (outsideMaskFraction > DRIFT_WARNING_THRESHOLD) {
+    console.log(`[mask-drift] CAUTION: changed=${changedPixels}, outside=${outsideMaskPixels}, ratio=${outsideMaskFraction.toFixed(4)}`);
+  } else if (outsideMaskPixels > 0) {
+    console.log(`[mask-drift] CLEANED: changed=${changedPixels}, outside=${outsideMaskPixels}, ratio=${outsideMaskFraction.toFixed(4)}`);
+  }
 
   return {
     drifted,

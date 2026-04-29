@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
+import { useStudioStore } from '@/lib/stores/studio-store';
 
 /**
  * Procreate-mapped touch gesture controller for the Studio canvas shell.
@@ -253,7 +254,8 @@ export function useCanvasGestures(
         const verticalTravel = threeFingerMaxY - start.y;
 
         if (quickTap) {
-          callbacksRef.current.onRedo();
+          useStudioStore.getState().redo();
+          callbacksRef.current.onRedo?.();
           return;
         }
 
@@ -270,7 +272,8 @@ export function useCanvasGestures(
 
       if (touchCount === 2) {
         if (quickTap) {
-          callbacksRef.current.onUndo();
+          useStudioStore.getState().undo();
+          callbacksRef.current.onUndo?.();
           return;
         }
 

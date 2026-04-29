@@ -188,19 +188,11 @@ export async function POST(
     };
 
     if (maskImage) {
-      editedBuffer = await clampEditToMask({
-        baseBuffer: sourceImage.buffer,
-        editedBuffer,
-        maskBuffer: maskImage.buffer,
-        maskType: body.maskType,
-      });
-      editedBase64 = editedBuffer.toString('base64');
-      editedMimeType = 'image/png';
-      outputDimensions = getImageDimensions(editedBuffer, editedMimeType);
-
+      // 1. VALIDATE raw AI output for drift first.
+      // We want to know if the model drifted too far from the source before we "fix" it.
       const driftResult = await validateServerMaskDrift({
         baseBuffer: sourceImage.buffer,
-        editedBuffer,
+        editedBuffer, // Raw AI output
         maskBuffer: maskImage.buffer,
         maskType: body.maskType,
       });
@@ -224,6 +216,17 @@ export async function POST(
           { status: 400 },
         );
       }
+
+      // 2. CLAMP the edit to the mask to ensure 100% clean output outside the targeted area.
+      editedBuffer = await clampEditToMask({
+        baseBuffer: sourceImage.buffer,
+        editedBuffer, // Raw AI output
+        maskBuffer: maskImage.buffer,
+        maskType: body.maskType,
+      });
+      editedBase64 = editedBuffer.toString('base64');
+      editedMimeType = 'image/png';
+      outputDimensions = getImageDimensions(editedBuffer, editedMimeType);
     }
 
     // Upload result to Vercel Blob

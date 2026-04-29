@@ -66,8 +66,33 @@ export function useStudioBootstrap() {
     }
   }
 
+  async function batchUpload(files: File[], projectId: string) {
+    setIsBootstrapping(true);
+    setError(null);
+    const assetIds: string[] = [];
+
+    try {
+      const { clientUploadAsset } = await import('@/lib/client/upload');
+      
+      for (const file of files) {
+        const uploadData = await clientUploadAsset(file, projectId, 'reference', file.name);
+        assetIds.push(uploadData.artifacts.assetId);
+      }
+      
+      router.refresh();
+      return assetIds;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Batch upload failed';
+      setError(msg);
+      throw err;
+    } finally {
+      setIsBootstrapping(false);
+    }
+  }
+
   return {
     bootstrap,
+    batchUpload,
     isBootstrapping,
     error,
     clearError: () => setError(null),
