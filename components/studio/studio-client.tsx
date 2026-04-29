@@ -405,10 +405,16 @@ export function StudioClient({ detail }: StudioClientProps) {
 
   // Piece State & History
   const initialPiece: PieceState = useMemo(() => {
+    const referenceImages = detail?.projectReferences?.length
+      ? detail.projectReferences.map((asset) => asset.blob_url)
+      : detail?.referenceAsset
+        ? [detail.referenceAsset.blob_url]
+        : [];
+
     return {
       id: detail?.project?.id,
       clientId: detail?.project?.id, // Fallback
-      referenceImages: detail?.referenceAsset ? [detail.referenceAsset.blob_url] : [],
+      referenceImages,
       baseImage: detail?.referenceAsset?.blob_url || null,
       designId: detail?.activeLock?.design_id_lock || null,
       styleId: detail?.activeLock?.style_id_lock || null,
@@ -420,7 +426,7 @@ export function StudioClient({ detail }: StudioClientProps) {
       variants: [],
       stencil: null,
       skinMockup: null,
-      activePhase: 'reference',
+      activePhase: detail?.activeLock ? 'surgical' : 'reference',
       request,
       fidelity,
       detailLevel,
@@ -440,9 +446,18 @@ export function StudioClient({ detail }: StudioClientProps) {
         setDockPosition({ x: window.innerWidth - 80, y: 400 });
       }
     } else {
-      // On Subsequent updates (like router.refresh), we just update the 'present'
-      // without clearing the 'past'/'future' history.
-      useStudioStore.getState().updatePresent(initialPiece);
+      const current = useStudioStore.getState().present;
+      useStudioStore.getState().updatePresent({
+        ...initialPiece,
+        activePhase: current.activePhase ?? initialPiece.activePhase,
+        activeReferenceIds: current.activeReferenceIds,
+        request: current.request ?? initialPiece.request,
+        fidelity: current.fidelity ?? initialPiece.fidelity,
+        detailLevel: current.detailLevel ?? initialPiece.detailLevel,
+        maskAssetId: current.maskAssetId ?? initialPiece.maskAssetId,
+        maskType: current.maskType ?? initialPiece.maskType,
+        regionHint: current.regionHint ?? initialPiece.regionHint,
+      });
     }
   }, [initialPiece, resetStore]);
 
@@ -450,7 +465,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   // const { ... } = useHistory<PieceState>(initialPiece, 100);
 
   // Workflow Gates
-  const gates = useMemo(() => {
+  const gates: Record<string, { status: string; unmet: { key: string; label: string }[] }> = useMemo(() => {
     const isReferenceDone = (piece?.referenceImages?.length || 0) > 0 || !!piece?.designSurfaceDocument;
     const isBaseSelected = !!piece.baseImage;
     const isLocked = !!piece.locksActive;
@@ -462,6 +477,10 @@ export function StudioClient({ detail }: StudioClientProps) {
         unmet: isBaseSelected ? [] : [{ key: 'base', label: 'Select a Base Image' }] 
       },
       surgical: { 
+        status: isLocked ? 'open' : 'locked', 
+        unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] 
+      },
+      creative: { 
         status: isLocked ? 'open' : 'locked', 
         unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] 
       },
@@ -504,32 +523,8 @@ export function StudioClient({ detail }: StudioClientProps) {
   const canvasTransformStyle = useMemo<React.CSSProperties>(() => ({
     transform: `translate(-50%, -50%) translate(${Math.round(canvasPan.x)}px, ${Math.round(canvasPan.y)}px) scale(${canvasScale}) rotate(${canvasRotation}deg)`,
     transformOrigin: 'center center',
-  }), [canvasPan.x, canvasPan.y, canvasScale, canvasRotation]);
-
-  const handleEnhancePrompt = async () => {
-    if (!request.trim() || busy) return;
-    setBusy('Optimizing Instruction');
-    try {
-      const response = await fetch('/api/ai/optimize-text', {
-        method: 'POST',
-        body: JSON.stringify({
-          originalText: request,
-          fieldKind: 'creative',
-        }),
-      });
-      const data = await response.json();
-      if (data.artifacts?.optimizedText) {
-        setRequest(data.artifacts.optimizedText);
-      }
-    } catch (err: any) {
-      setMessage({ text: `Enhance failed: ${err.message}`, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  // Control State
-  // Operation and other UI states are now managed by the global store.
+    transition: busy ? 'none' : 'transform 0.1s ease-out'
+  }), [canvasPan.x, canvasPan.y, canvasScale, canvasRotation, busy]);
 
   const operationLabel = useMemo(() => {
     switch (operation) {
@@ -543,12 +538,7 @@ export function StudioClient({ detail }: StudioClientProps) {
     }
   }, [operation]);
 
-  const currentPhase = useMemo(() => {
-    return PHASES.find(p => p.id === activePhaseId)?.code || 'STUDIO';
-  }, [activePhaseId]);
-
-
-  const { bootstrap, batchUpload, isBootstrapping, error: bootstrapError, clearError } = useStudioBootstrap();
+  const { bootstrap, batchUpload } = useStudioBootstrap();
 
   const resetCanvasView = useCallback(() => {
     setCanvasScale(1);
@@ -606,7 +596,7 @@ export function StudioClient({ detail }: StudioClientProps) {
         setMessage({ text: 'Copy/Paste menu gesture', type: 'info' });
       },
       onClearLayer: () => {
-        pushCheckpoint(); // Save current state before clearing
+        pushCheckpoint();
         setRequest('');
         setMaskAssetId(null);
         setRegionHint(null);
@@ -614,7 +604,6 @@ export function StudioClient({ detail }: StudioClientProps) {
         setStatus('Layer cleared.');
         setMessage({ text: 'Layer Cleared (Scrub)', type: 'info' });
         
-        // Push the cleared state as a new checkpoint after a tiny delay
         setTimeout(() => {
           pushPiece({
             ...piece,
@@ -627,11 +616,6 @@ export function StudioClient({ detail }: StudioClientProps) {
     },
   );
 
-
-
-
-
-  // --- Voice Setup ---
   const handleVoiceCommand = useCallback((command: VoiceCommand) => {
     switch (command.type) {
       case 'SET_OPERATION':
@@ -683,7 +667,6 @@ export function StudioClient({ detail }: StudioClientProps) {
     onTranscript: (text) => setRequest(text),
   });
 
-  // --- Handlers ---
   const handleAddReference = () => uploadInputRef.current?.click();
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -691,7 +674,6 @@ export function StudioClient({ detail }: StudioClientProps) {
     if (files && files.length > 0) {
       const fileArray = Array.from(files);
       
-      // If we don't have a session ID yet, bootstrap with the first file
       if (!piece.id) {
         setBusy('INITIALIZING SESSION');
         try {
@@ -712,34 +694,9 @@ export function StudioClient({ detail }: StudioClientProps) {
           e.target.value = '';
         }
       } else {
-        // We already have a session, just batch upload
         await handleBatchUpload(files);
         e.target.value = '';
       }
-    }
-  };
-
-  const handleOptimize = async () => {
-    if (!request.trim()) {
-      setStatus('Add client wording before optimizing.');
-      return;
-    }
-    setBusy('OPTIMIZING');
-    try {
-      const resp = await fetch('/api/ai/optimize-text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ originalText: request.trim(), fieldKind: 'general' }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Optimize failed');
-      setRequest(data.artifacts?.optimizedText ?? request.trim());
-      setStatus('Text optimized.');
-    } catch (err: any) {
-      setStatus('Optimize failed.');
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
     }
   };
 
@@ -752,6 +709,27 @@ export function StudioClient({ detail }: StudioClientProps) {
     }
   };
 
+  const handleEnhancePrompt = async () => {
+    if (!request.trim() || busy) return;
+    setBusy('REFINING INSTRUCTION');
+    try {
+      const resp = await fetch('/api/ai/optimize-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ originalText: request.trim(), fieldKind: 'general' }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Optimization failed');
+      setRequest(data.artifacts?.optimizedText ?? request.trim());
+      setStatus('Instruction refined.');
+    } catch (err: any) {
+      setStatus('Refinement failed.');
+      setMessage({ text: err.message, type: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleBatchUpload = async (files: FileList) => {
     if (!piece.id) return;
     setBusy('UPLOADING REFERENCES');
@@ -759,9 +737,6 @@ export function StudioClient({ detail }: StudioClientProps) {
       const fileArray = Array.from(files);
       const newAssetIds = await batchUpload(fileArray, piece.id);
       
-      // Update local state with temporary blob URLs for immediate preview if needed,
-      // but bootstrap/batchUpload usually refreshes the server state.
-      // For now, we'll rely on the refresh but add the new images to piece state.
       const newUrls = fileArray.map(f => URL.createObjectURL(f));
       pushPiece({
         ...piece,
@@ -777,32 +752,19 @@ export function StudioClient({ detail }: StudioClientProps) {
   };
 
   const handleRun = async () => {
-    if (!detail?.session.id || !detail?.project.id) return;
-
-    // Check phase gate
-    if (gates[activePhaseId].status === 'locked') {
-      setMessage({ text: `Phase locked: ${gates[activePhaseId].unmet[0].label}`, type: 'error' });
+    if (!detail?.session.id || !detail?.project.id) {
+      setStatus('Upload a reference image to start a studio session.');
       return;
     }
 
-    if (operation === 'Extract') {
-      if (!detail.referenceAsset) {
-        setStatus('Add a reference image first.');
-        return;
-      }
-      setBusy('EXTRACTING LOCKS');
-      try {
-        const resp = await fetch(`/api/sessions/${detail.session.id}/extract-locks`, { method: 'POST' });
-        if (!resp.ok) throw new Error('Extraction failed');
-        router.refresh();
-        setMessage({ text: 'Locks extracted successfully', type: 'info' });
-        setActiveDrawer('locks');
-        setOperation('Surgical');
-      } catch (err: any) {
-        setMessage({ text: err.message, type: 'error' });
-      } finally {
-        setBusy(null);
-      }
+    const phaseGate = gates[activePhaseId];
+    if (phaseGate.status === 'locked') {
+      setMessage({ text: `Phase locked: ${phaseGate.unmet[0]?.label ?? 'Complete the previous step'}`, type: 'error' });
+      return;
+    }
+
+    if (!displayAsset?.id) {
+      setStatus('Select a base reference before running.');
       return;
     }
 
@@ -811,9 +773,10 @@ export function StudioClient({ detail }: StudioClientProps) {
       return;
     }
 
-    const presetId = derivePresetId(operation, DEFAULT_MODE, DEFAULT_VARIANCE);
-    const fidelityNorm = percentToNorm(fidelity);
-    const detailNorm = percentToNorm(detailLevel);
+    const activeReferenceId = piece.activeReferenceIds?.[0] ?? null;
+    const generationPresetId = derivePresetId(operation, DEFAULT_MODE, DEFAULT_VARIANCE);
+    const designFidelity = percentToNorm(fidelity);
+    const detailLoad = percentToNorm(detailLevel);
 
     setBusy(`RUNNING ${operation.toUpperCase()}`);
     try {
@@ -821,19 +784,28 @@ export function StudioClient({ detail }: StudioClientProps) {
       let body: Record<string, unknown> = {};
 
       switch (operation) {
+        case 'Extract':
+          endpoint = `/api/sessions/${detail.session.id}/extract-locks`;
+          body = {
+            sourceAssetId: displayAsset.id,
+            tattooMode: DEFAULT_TATTOO_MODE,
+          };
+          break;
         case 'Surgical':
           endpoint = `/api/sessions/${detail.session.id}/surgical-edit`;
           body = {
             delta1: request.trim(),
-            baseAssetId: displayAsset?.id,
-            referenceAssetIds: piece.activeReferenceIds || [],
+            baseAssetId: displayAsset.id,
+            referenceAssetId: activeReferenceId,
             maskAssetId,
             regionHint,
             maskType,
-            designFidelity: fidelityNorm,
-            detailLoad: detailNorm,
-            generationPresetId: presetId,
-            variancePreset: DEFAULT_VARIANCE
+            designFidelity,
+            detailLoad,
+            symmetryLock: DEFAULT_SYMMETRY_LOCK,
+            tattooMode: DEFAULT_TATTOO_MODE,
+            generationPresetId,
+            variancePreset: DEFAULT_VARIANCE,
           };
           break;
         case 'Creative':
@@ -841,25 +813,46 @@ export function StudioClient({ detail }: StudioClientProps) {
           body = {
             transformation: request.trim(),
             intensity: varianceToIntensity(DEFAULT_VARIANCE),
-            baseAssetId: displayAsset?.id,
-            referenceAssetIds: piece.activeReferenceIds || [],
+            baseAssetId: displayAsset.id,
+            referenceAssetId: activeReferenceId,
+            transferMode: activeReferenceId ? 'reference_transfer' : 'none',
             maskAssetId,
-            designFidelity: fidelityNorm,
-            detailLoad: detailNorm,
-            generationPresetId: presetId
+            maskType,
+            designFidelity,
+            detailLoad,
+            symmetryLock: DEFAULT_SYMMETRY_LOCK,
+            tattooMode: DEFAULT_TATTOO_MODE,
+            generationPresetId,
+            variancePreset: DEFAULT_VARIANCE,
           };
           break;
         case 'Variant':
           endpoint = `/api/sessions/${detail.session.id}/variant-sheet`;
-          body = { baseAssetId: displayAsset?.id, constraints: request.trim() || null, layout: 'single', generationPresetId: presetId };
+          body = {
+            baseAssetId: displayAsset.id,
+            constraints: request.trim() || null,
+            layout: 'single',
+            generationPresetId,
+            variancePreset: DEFAULT_VARIANCE,
+          };
           break;
         case 'Stencil':
           endpoint = `/api/sessions/${detail.session.id}/stencil`;
-          body = { baseAssetId: displayAsset?.id, designFidelity: fidelityNorm, detailLoad: detailNorm };
+          body = {
+            baseAssetId: displayAsset.id,
+            designFidelity,
+            detailLoad,
+          };
           break;
         case 'Mockup':
           endpoint = `/api/sessions/${detail.session.id}/mockup`;
-          body = { baseAssetId: displayAsset?.id, placement: 'Forearm', designFidelity: fidelityNorm, detailLoad: detailNorm };
+          body = {
+            baseAssetId: displayAsset.id,
+            placement: 'Forearm',
+            designFidelity,
+            detailLoad,
+            tattooMode: DEFAULT_TATTOO_MODE,
+          };
           break;
       }
 
@@ -876,8 +869,15 @@ export function StudioClient({ detail }: StudioClientProps) {
       setMessage({ text: `${operationAction(operation)} complete`, type: 'info' });
       setStatus('Ready');
       
-      // If the API returns a result asset, push it to history
-      if (data.artifacts?.outputAsset) {
+      if (operation === 'Extract') {
+        pushPiece({
+          ...piece,
+          locksActive: true,
+          locksExtracted: true,
+          activePhase: 'surgical'
+        });
+        setOperation('Surgical');
+      } else if (data.artifacts?.outputAsset) {
         pushPiece({
           ...piece,
           baseImage: data.artifacts.outputAsset.blob_url,
@@ -894,30 +894,9 @@ export function StudioClient({ detail }: StudioClientProps) {
     }
   };
 
-  const handleApproveEdit = async (editRunId: string) => {
-    if (!detail?.session.id) return;
-    setBusy('APPROVING DESIGN');
-    try {
-      const resp = await fetch(`/api/sessions/${detail.session.id}/approve-edit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ editRunId }),
-      });
-      if (!resp.ok) throw new Error('Failed to approve');
-      router.refresh();
-      setMessage({ text: 'Design approved', type: 'info' });
-      setPreviewAssetId(null);
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const handleUpdateReference = async (assetId: string) => {
     if (!detail?.session.id) return;
 
-    // If we are in an editing phase, we toggle references for the prompt instead of switching the base.
     if (activePhaseId !== 'reference') {
       const current = piece.activeReferenceIds || [];
       const next = current.includes(assetId)
@@ -937,7 +916,6 @@ export function StudioClient({ detail }: StudioClientProps) {
       });
       if (!resp.ok) throw new Error('Failed to update reference');
       
-      // Update local state
       const newRef = detail.projectReferences.find(r => r.id === assetId);
       if (newRef) {
         pushPiece({ ...piece, baseImage: newRef.blob_url });
@@ -945,26 +923,6 @@ export function StudioClient({ detail }: StudioClientProps) {
 
       router.refresh();
       setMessage({ text: 'Base reference updated', type: 'info' });
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleRelock = async () => {
-    if (!detail?.latestApprovedAsset || !detail?.session.id) return;
-    setBusy('RELOCKING APPROVED BASE');
-    try {
-      const resp = await fetch(`/api/sessions/${detail.session.id}/relock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceAssetId: detail.latestApprovedAsset.id }),
-      });
-      if (!resp.ok) throw new Error('Failed to relock');
-      setActiveDrawer('locks');
-      setMessage({ text: 'Approved base relocked', type: 'info' });
-      router.refresh();
     } catch (err: any) {
       setMessage({ text: err.message, type: 'error' });
     } finally {
@@ -985,21 +943,6 @@ export function StudioClient({ detail }: StudioClientProps) {
       if (!resp.ok) throw new Error(data.error || 'Failed to save to reference board');
       setMessage({ text: 'Saved to Reference Board', type: 'info' });
       router.refresh();
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleDeleteAsset = async (assetId: string) => {
-    if (!confirm('Are you sure you want to delete this asset?')) return;
-    setBusy('DELETING ASSET');
-    try {
-      const resp = await fetch(`/api/assets/${assetId}`, { method: 'DELETE' });
-      if (!resp.ok) throw new Error('Failed to delete asset');
-      router.refresh();
-      setMessage({ text: 'Asset deleted', type: 'info' });
     } catch (err: any) {
       setMessage({ text: err.message, type: 'error' });
     } finally {
@@ -1062,7 +1005,6 @@ export function StudioClient({ detail }: StudioClientProps) {
     }
   }, [operation]);
 
-  // --- DATA MAPPING ---
   const latestEditRun = detail?.editRuns?.[0];
   const isCompletedEditRun = latestEditRun?.status === 'succeeded' || latestEditRun?.status === 'complete';
   const latestOutput = isCompletedEditRun ? latestEditRun?.outputAsset : null;
@@ -1090,9 +1032,48 @@ export function StudioClient({ detail }: StudioClientProps) {
     ];
   }, [detail?.activeLock]);
 
+  const handleRelock = async () => {
+    if (!detail?.latestApprovedAsset || !detail?.session.id) return;
+    setBusy('RELOCKING APPROVED BASE');
+    try {
+      const resp = await fetch(`/api/sessions/${detail.session.id}/relock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceAssetId: detail.latestApprovedAsset.id }),
+      });
+      if (!resp.ok) throw new Error('Failed to relock');
+      setActiveDrawer('locks');
+      setMessage({ text: 'Approved base relocked', type: 'info' });
+      router.refresh();
+    } catch (err: any) {
+      setMessage({ text: err.message, type: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!confirm('Are you sure you want to delete this asset?')) return;
+    setBusy('DELETING ASSET');
+    try {
+      const resp = await fetch(`/api/assets/${assetId}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error('Failed to delete asset');
+      router.refresh();
+      setMessage({ text: 'Asset deleted', type: 'info' });
+    } catch (err: any) {
+      setMessage({ text: err.message, type: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // --- RENDER HELPERS ---
   const renderReferenceWorkspace = () => {
-    const refs = piece.referenceImages || [];
+    const refs = detail?.projectReferences?.length
+      ? detail.projectReferences
+      : detail?.referenceAsset
+        ? [detail.referenceAsset]
+        : [];
     
     if (refs.length === 0) {
       return (
@@ -1113,19 +1094,23 @@ export function StudioClient({ detail }: StudioClientProps) {
     return (
       <div className="h-full w-full p-6 overflow-y-auto scrollbar-hide">
         <div className="grid grid-cols-4 gap-4 auto-rows-[200px]">
-          {refs.map((url, i) => {
-            // Create a Bento-like pattern
+          {refs.map((asset, i) => {
+            const url = asset.blob_url;
             const isWide = (i % 7 === 1 || i % 7 === 5);
             const isTall = (i % 7 === 3);
             const isLarge = (i % 7 === 0);
             
             return (
               <div
-                key={url}
+                key={asset.id}
                 onClick={() => pushPiece({ baseImage: url })}
-                onDoubleClick={() => {
-                  pushPiece({ baseImage: url });
-                  setActivePhaseId('extract');
+                onDoubleClick={async () => {
+                  await handleUpdateReference(asset.id);
+                  pushPiece({
+                    ...useStudioStore.getState().present,
+                    baseImage: url,
+                    activePhase: 'extract',
+                  });
                   setOperation('Extract');
                   setStatus('Base selected. Entering Lock Extraction.');
                 }}
@@ -1138,7 +1123,7 @@ export function StudioClient({ detail }: StudioClientProps) {
                 <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/60 backdrop-blur-md border border-white/10 z-20">
                   <span className="text-[10px] font-black text-tls-amber">REF{i + 1}</span>
                 </div>
-                <img src={url} className="w-full h-full object-cover" alt="ref" />
+                <img src={url} className="w-full h-full object-cover" alt={`Reference ${i + 1}`} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
                   <div className="flex items-center justify-between w-full">
                     <span className="text-[9px] font-black uppercase tracking-widest text-white">Select Base</span>
@@ -1148,11 +1133,7 @@ export function StudioClient({ detail }: StudioClientProps) {
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    pushPiece(prev => ({
-                      ...prev,
-                      referenceImages: prev.referenceImages.filter(img => img !== url),
-                      baseImage: prev.baseImage === url ? null : prev.baseImage
-                    }));
+                    handleDeleteAsset(asset.id);
                   }}
                   className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/40 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
                 >
@@ -1430,7 +1411,6 @@ export function StudioClient({ detail }: StudioClientProps) {
       {chrome && renderTopBar()}
       <input type="file" ref={uploadInputRef} style={{ display: 'none' }} accept="image/*" multiple onChange={onFileChange} />
 
-      {/* CANVAS STAGE */}
       <main 
         ref={canvasGestureRef as any} 
         className="tls-artboard-frame"
@@ -1448,7 +1428,6 @@ export function StudioClient({ detail }: StudioClientProps) {
             renderReferenceWorkspace()
           ) : (
             <div className="relative h-full w-full">
-              {/* Badge */}
               <div className="tls-artboard-badge z-20 flex items-center gap-2">
                 {regionHint && (
                   <div className="flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded bg-tls-amber text-black text-[8px] font-black animate-tls-slide-in">
@@ -1487,7 +1466,7 @@ export function StudioClient({ detail }: StudioClientProps) {
                     if (!detail?.project.id) return;
                     try {
                       const asset = await clientUploadAsset(blob, detail.project.id, 'mask');
-                      setMaskAssetId(asset.id);
+                      setMaskAssetId(asset.artifacts.assetId);
                       setStatus('Mask updated.');
                     } catch (err) {
                       setStatus('Mask upload failed.');
@@ -1525,15 +1504,39 @@ export function StudioClient({ detail }: StudioClientProps) {
           {activeDrawer === 'layers' && renderLayersDrawer()}
           {activeDrawer === 'refs' && renderRefsDrawer()}
 
-          {/* BOTTOM COMMAND */}
           <section className="tls-command">
             <div className="flex-1 flex flex-col gap-1.5">
               <div className="flex items-center justify-between px-2">
-                <div className="flex items-center gap-2 text-tls-muted text-[10px] font-black tracking-[0.2em] uppercase">
-                  <span className="text-tls-amber">✦</span>
-                  <span>Artist Instruction (Use Ref1, Ref2... to link anchors)</span>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-tls-muted text-[10px] font-black tracking-[0.2em] uppercase">
+                    <span className="text-tls-amber">✦</span>
+                    <span>Artist Instruction</span>
+                  </div>
+                  
+                  {(piece.activeReferenceIds?.length || 0) > 0 && (
+                    <div className="flex items-center gap-1 animate-tls-slide-in">
+                      <div className="h-4 w-px bg-white/10 mx-1" />
+                      {piece.activeReferenceIds?.map((id, i) => {
+                        const ref = detail?.projectReferences?.map((r: any) => r).find((r: any) => r.id === id);
+                        return (
+                          <div key={id} className="flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md bg-tls-amber/10 border border-tls-amber/20">
+                            <div className="w-3.5 h-3.5 rounded bg-black overflow-hidden border border-tls-amber/30">
+                              {ref?.blob_url && <img src={ref.blob_url} className="w-full h-full object-cover" />}
+                            </div>
+                            <span className="text-[9px] font-black text-tls-amber">REF {i + 1}</span>
+                            <button 
+                              onClick={() => handleUpdateReference(id)}
+                              className="text-tls-amber/40 hover:text-tls-amber transition-colors bg-transparent border-0 p-0 cursor-pointer"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="tls-readonly-pill">Read Only Phase</div>
+                {activePhaseId === 'extract' && <div className="tls-readonly-pill">Read Only Phase</div>}
               </div>
               <div className="flex w-full gap-2 bg-white/[0.04] rounded-xl border border-white/[0.06] p-1 pr-1.5">
                 <input

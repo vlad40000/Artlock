@@ -43,6 +43,7 @@ export interface SessionDetailRecord {
     latest_approved_asset_id: string | null;
     status: string;
     created_at: string;
+    client_state?: Record<string, any> | null;
   };
   project: {
     id: string;
@@ -116,7 +117,7 @@ export async function getOwnedSessionDetail(sessionId: string): Promise<OwnedSes
   const userId = sessionUser.user.id;
 
   const sessions = await sql`
-    SELECT id, project_id, reference_asset_id, active_lock_id, latest_approved_asset_id, status, created_at
+    SELECT id, project_id, reference_asset_id, active_lock_id, latest_approved_asset_id, status, created_at, client_state
     FROM design_sessions
     WHERE id = ${sessionId}
   ` as any[];
@@ -161,7 +162,7 @@ export async function getOwnedSessionDetail(sessionId: string): Promise<OwnedSes
       SELECT a.id, a.project_id, a.kind, a.blob_url, a.mime_type, a.width, a.height, a.source_asset_id, a.created_by_phase, a.created_at
       FROM assets a
       JOIN projects p ON a.project_id = p.id
-      WHERE p.owner_id = ${userId} AND a.kind = 'reference'
+      WHERE p.owner_id = ${userId} AND a.project_id = ${session.project_id} AND a.kind = 'reference'
       ORDER BY a.created_at DESC
       LIMIT 100
     ` as Promise<any[]>,

@@ -1,16 +1,42 @@
 import { neon, Pool } from '@neondatabase/serverless';
 
-const url = process.env.DATABASE_URL || 'postgres://placeholder:placeholder@placeholder/placeholder';
+type SqlTemplate = (strings: TemplateStringsArray, ...values: any[]) => Promise<any>;
 
-const client = neon(url);
-const pool = new Pool({ connectionString: url });
+let client: SqlTemplate | null = null;
+let pool: Pool | null = null;
+
+function getDatabaseUrl() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error('[env] DATABASE_URL is required for database access.');
+  }
+  return url;
+}
+
+function getClient() {
+  if (!client) {
+    client = neon(getDatabaseUrl()) as unknown as SqlTemplate;
+  }
+
+  return client;
+}
+
+function getPool() {
+  if (!pool) {
+    pool = new Pool({ connectionString: getDatabaseUrl() });
+  }
+
+  return pool;
+}
 
 /**
  * Direct Neon SQL client with transaction support.
  */
-export const sql = Object.assign(client, {
+export const sql = Object.assign(
+  (strings: TemplateStringsArray, ...values: any[]) => getClient()(strings, ...values),
+  {
   async transaction<T>(callback: (tx: (strings: TemplateStringsArray, ...values: any[]) => Promise<any>) => Promise<T>): Promise<T> {
-    const conn = await pool.connect();
+    const conn = await getPool().connect();
     try {
       await conn.query('BEGIN');
       const tx = async (strings: TemplateStringsArray, ...values: any[]) => {

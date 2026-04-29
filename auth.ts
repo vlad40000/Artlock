@@ -57,6 +57,11 @@ function toAuthUser(user: Omit<AppUserRow, 'password_hash'>): AuthUser {
   };
 }
 
+function isDatabaseUnavailable(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return error.message.includes('DATABASE_URL') || error.message.includes('fetch failed');
+}
+
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString('base64url');
   const derivedKey = (await scrypt(password, salt, 64)) as Buffer;
@@ -110,10 +115,15 @@ export async function clearAuthSession() {
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
   if (token) {
-    await sql`
-      DELETE FROM auth_sessions
-      WHERE token_hash = ${hashSessionToken(token)}
-    `;
+    try {
+      await sql`
+        DELETE FROM auth_sessions
+        WHERE token_hash = ${hashSessionToken(token)}
+      `;
+    } catch (error) {
+      if (!isDatabaseUnavailable(error)) throw error;
+      console.warn('[auth] skipped session cleanup because the database is unavailable');
+    }
   }
 }
 
@@ -122,14 +132,21 @@ export async function auth(): Promise<AuthResult | null> {
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
   if (!token) return null;
 
-  const rows = (await sql`
-    SELECT u.id, u.email, u.display_name, u.image_url
-    FROM auth_sessions s
-    JOIN app_user u ON u.id = s.user_id
-    WHERE s.token_hash = ${hashSessionToken(token)}
-      AND s.expires_at > NOW()
-    LIMIT 1
-  `) as Array<Omit<AppUserRow, 'password_hash'>>;
+  let rows: Array<Omit<AppUserRow, 'password_hash'>>;
+  try {
+    rows = (await sql`
+      SELECT u.id, u.email, u.display_name, u.image_url
+      FROM auth_sessions s
+      JOIN app_user u ON u.id = s.user_id
+      WHERE s.token_hash = ${hashSessionToken(token)}
+        AND s.expires_at > NOW()
+      LIMIT 1
+    `) as Array<Omit<AppUserRow, 'password_hash'>>;
+  } catch (error) {
+    if (!isDatabaseUnavailable(error)) throw error;
+    console.warn('[auth] treating session as signed out because the database is unavailable');
+    return null;
+  }
 
   const user = rows[0];
   return user ? { user: toAuthUser(user) } : null;
