@@ -1008,14 +1008,14 @@ export function StudioClient({ detail }: StudioClientProps) {
 
   const runLabel = useMemo(() => {
     switch (operation) {
-      case 'Extract': return 'Scan Source';
-      case 'Surgical': return 'Apply Touch';
-      case 'Creative': return 'Forge Pivot';
-      case 'Mockup': return 'Project Skin';
-      case 'Variant': return 'Cast Variants';
-      case 'Stencil': return 'Burn Stencil';
-      case 'Turnaround': return 'Rotate View';
-      default: return 'Process';
+      case 'Extract': return 'Extract Locks';
+      case 'Surgical': return 'Surgical Edit';
+      case 'Creative': return 'Creative Pivot';
+      case 'Mockup': return 'Skin Mockup';
+      case 'Variant': return 'Flash Sheet';
+      case 'Stencil': return 'Stencil Export';
+      case 'Turnaround': return 'Model Sheet';
+      default: return 'Execute';
     }
   }, [operation]);
 

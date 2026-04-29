@@ -67,23 +67,23 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function operationAction(operation: Operation) {
   switch (operation) {
     case 'Extract':
-      return 'Extract Phase 1a Locks';
+      return 'Extract Locks';
     case 'Surgical':
-      return 'Run Edit';
+      return 'Surgical Edit';
     case 'Creative':
-      return 'Run Creative Delta';
+      return 'Creative Pivot';
     case 'Variant':
-      return 'Generate Variant Sheet';
+      return 'Flash Sheet';
     case 'Turnaround':
-      return 'Generate Model Sheet';
+      return 'Model Sheet';
     case 'Stencil':
-      return 'Extract Stencil Linework';
+      return 'Stencil Export';
     case 'Mockup':
-      return 'Place on Skin Mockup';
+      return 'Skin Mockup';
     case 'QA':
-      return 'Run Drift Check';
+      return 'Drift Check';
     default:
-      return 'Run';
+      return 'Execute';
   }
 }
 
