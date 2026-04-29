@@ -171,7 +171,7 @@ export async function POST(
           exclusions: body.exclusions ?? null,
           referenceAssetIds: uniqueReferenceAssetIds,
           transferInstruction: body.transferInstruction ?? null,
-          transferMode,
+          transferMode: body.transferMode,
         })},
         'succeeded', ${env.geminiImageModel}, ${TATTOO_PHASE_1C.version}
       )
