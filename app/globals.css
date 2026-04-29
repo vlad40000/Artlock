@@ -621,18 +621,18 @@
     left: calc(50% + var(--tls-stage-shift-x));
     top: calc(50% + var(--tls-stage-shift-y));
     width: min(
-      70vw,
+      92vw,
       calc(100vw - var(--tls-stage-left) - var(--tls-stage-right) - var(--tls-stage-gutter)),
-      calc(100dvh - var(--tls-stage-top) - var(--tls-stage-bottom) - 32px),
-      760px
+      calc(100dvh - var(--tls-stage-top) - var(--tls-stage-bottom) - 40px),
+      1200px
     );
-    max-height: 760px;
+    max-height: 1200px;
     aspect-ratio: 1 / 1;
     transform: translate(-50%, -50%);
     border-radius: 34px;
-    padding: 28px;
+    padding: 8px;
     background: #15120e;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 48px 160px rgba(0, 0, 0, 0.72);
     z-index: 5;
   }

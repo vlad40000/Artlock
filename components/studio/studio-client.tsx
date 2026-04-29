@@ -1048,6 +1048,80 @@ export function StudioClient({ detail }: StudioClientProps) {
   }, [detail?.activeLock]);
 
   // --- RENDER HELPERS ---
+  const renderReferenceWorkspace = () => {
+    const refs = piece.referenceImages || [];
+    
+    if (refs.length === 0) {
+      return (
+        <div 
+          onClick={() => uploadInputRef.current?.click()}
+          className="h-full w-full flex flex-col items-center justify-center cursor-pointer group transition-colors hover:bg-white/[0.02]"
+        >
+          <div className="w-24 h-24 rounded-full bg-white/[0.03] border border-white/5 flex items-center justify-center mb-8 text-white/5 group-hover:text-tls-amber group-hover:border-tls-amber/20 group-hover:bg-tls-amber/5 transition-all duration-500">
+            <Upload size={32} strokeWidth={1} />
+          </div>
+          <div className="text-[10px] font-black uppercase tracking-[0.4em] text-white/10 group-hover:text-white/40 transition-colors duration-500">
+            Drop Inspiration to Start
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="h-full w-full p-6 overflow-y-auto scrollbar-hide">
+        <div className="grid grid-cols-4 gap-4 auto-rows-[200px]">
+          {refs.map((url, i) => {
+            // Create a Bento-like pattern
+            const isWide = (i % 7 === 1 || i % 7 === 5);
+            const isTall = (i % 7 === 3);
+            const isLarge = (i % 7 === 0);
+            
+            return (
+              <div
+                key={url}
+                onClick={() => pushPiece({ baseImage: url })}
+                className={`relative group cursor-pointer rounded-2xl overflow-hidden border-2 transition-all duration-500 hover:scale-[1.02] hover:z-10 ${
+                  piece.baseImage === url 
+                    ? 'border-tls-amber ring-4 ring-tls-amber/20 z-10' 
+                    : 'border-white/5 grayscale-[0.8] hover:grayscale-0 hover:border-white/20'
+                } ${isLarge ? 'col-span-2 row-span-2' : isWide ? 'col-span-2' : isTall ? 'row-span-2' : ''}`}
+              >
+                <img src={url} className="w-full h-full object-cover" alt="ref" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white">Select Base</span>
+                    {piece.baseImage === url && <div className="w-2 h-2 rounded-full bg-tls-amber shadow-[0_0_8px_#fbbf24]" />}
+                  </div>
+                </div>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    pushPiece(prev => ({
+                      ...prev,
+                      referenceImages: prev.referenceImages.filter(img => img !== url),
+                      baseImage: prev.baseImage === url ? null : prev.baseImage
+                    }));
+                  }}
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/40 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            );
+          })}
+          
+          <button
+            onClick={() => uploadInputRef.current?.click()}
+            className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/5 hover:border-white/20 hover:bg-white/[0.02] transition-all group"
+          >
+            <Plus className="w-8 h-8 text-white/10 group-hover:text-white/40 transition-colors" />
+            <span className="mt-4 text-[9px] font-black uppercase tracking-widest text-white/10 group-hover:text-white/40">Add More</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderTopBar = () => (
     <header className="tls-topbar">
       <div className="flex items-center gap-2">
@@ -1311,18 +1385,8 @@ export function StudioClient({ detail }: StudioClientProps) {
             </div>
           )}
 
-          {(!displayAsset && activePhaseId === 'reference') ? (
-            <div 
-              onClick={() => uploadInputRef.current?.click()}
-              className="h-full w-full flex flex-col items-center justify-center cursor-pointer group transition-colors hover:bg-white/[0.02]"
-            >
-              <div className="w-20 h-20 rounded-full bg-white/[0.03] border border-white/5 flex items-center justify-center mb-6 text-white/10 group-hover:text-tls-amber group-hover:border-tls-amber/20 group-hover:bg-tls-amber/5 transition-all">
-                <Upload size={32} strokeWidth={1} />
-              </div>
-              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20 group-hover:text-white/40 transition-colors">
-                Drop or Click to Begin
-              </div>
-            </div>
+          {activePhaseId === 'reference' ? (
+            renderReferenceWorkspace()
           ) : (
             <div className="relative h-full w-full">
               {/* Badge */}
