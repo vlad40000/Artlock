@@ -186,7 +186,7 @@ export async function POST(
         intensity: body.intensity,
         exclusions: body.exclusions ?? null,
         referenceAssetIds: uniqueReferenceAssetIds,
-        transferMode,
+        transferMode: body.transferMode,
       },
     });
   } catch (error) {

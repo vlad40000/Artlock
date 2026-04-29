@@ -10,7 +10,7 @@ import { TATTOO_PHASE_4A } from './prompt-contracts/tattoo-phase-4a';
 import { TATTOO_PHASE_5 } from './prompt-contracts/tattoo-phase-5';
 import { TATTOO_QA, TattooQAReport } from './prompt-contracts/tattoo-qa';
 import { downloadAsset } from '../utils/storage';
-import { AI_OPTIMIZE_DEFAULT_INSTRUCTIONS } from './prompt-contracts/ai-optimize';
+import { AI_OPTIMIZE, AI_OPTIMIZE_DEFAULT_INSTRUCTIONS } from './prompt-contracts/ai-optimize';
 import { VOICE_COMMAND } from './prompt-contracts/voice-command';
 
 
