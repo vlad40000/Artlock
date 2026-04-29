@@ -45,6 +45,7 @@ import { interpretSurgicalInstruction } from '@/lib/ai/surgical-interpreter';
 import { SurgicalDeltaOverlay } from './shared/surgical-delta-overlay';
 import { useStudioStore } from '@/lib/stores/studio-store';
 import type { PieceState, DesignPhase } from '@/types/domain';
+import type { OptimizeFieldKind } from '@/lib/ai/prompt-contracts/ai-optimize';
 
 // --- CONFIG ---
 const DEFAULT_MODE = 'Surgical Local';

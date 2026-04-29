@@ -125,7 +125,6 @@ export const TATTOO_PHASE_1B = {
       designIdLock?: string | null;
       styleIdLock?: string | null;
     }[];
-    referenceAssistMode?: 'none' | 'reference_assist' | 'locked_reference_assist';
     delta1: string;
     delta2?: string | null;
     maskMode?: 'provided' | 'none';
@@ -137,7 +136,9 @@ export const TATTOO_PHASE_1B = {
     const delta1 = args.delta1.trim();
     const delta2 = args.delta2?.trim() ? args.delta2.trim() : 'None';
     const regionHint = args.regionHint?.trim() ? args.regionHint.trim() : '[X]';
-    const referenceAssistMode = args.referenceAssistMode ?? 'none';
+    const referenceAssistMode = args.references && args.references.length > 0
+      ? (args.references.some(r => r.designIdLock) ? 'locked_reference_assist' : 'reference_assist')
+      : 'none';
     const symmetry = args.symmetryLock ? 'ENABLED' : 'DISABLED';
     const maskType = args.maskType ?? 'include';
 
