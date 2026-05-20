@@ -12,6 +12,7 @@ import { TATTOO_QA, TattooQAReport } from './prompt-contracts/tattoo-qa';
 import { downloadAsset } from '../utils/storage';
 import { AI_OPTIMIZE, AI_OPTIMIZE_DEFAULT_INSTRUCTIONS } from './prompt-contracts/ai-optimize';
 import { VOICE_COMMAND } from './prompt-contracts/voice-command';
+import { TATTOO_FLASH_THEME } from './prompt-contracts/tattoo-flash-theme';
 
 
 const Modality = { TEXT: 'TEXT', IMAGE: 'IMAGE' } as any;
@@ -736,4 +737,63 @@ export async function parseVoiceCommand(args: {
     console.error('Voice Parsing Error:', error, text);
     throw new Error('Failed to parse voice command from Gemini');
   }
+}
+
+// ── Flash Theme Extraction ────────────────────────────────────────────────────
+
+export interface FlashThemeExtraction {
+  suggested_title: string;
+  style_family: string;
+  palette_lock: string;
+  motif_lock: string;
+  line_weight_lock: string;
+  shading_lock: string;
+  composition_rules: string;
+  raw_theme_lock: string;
+}
+
+export async function extractFlashTheme(args: {
+  imageBase64: string;
+  mimeType: string;
+}): Promise<FlashThemeExtraction> {
+  const response = (await generateContentWithRetry({
+    model: env.geminiPhase1AModel,
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { text: TATTOO_FLASH_THEME.prompt },
+          { inlineData: { mimeType: args.mimeType, data: args.imageBase64 } },
+        ],
+      },
+    ],
+    config: {
+      systemInstruction: TATTOO_FLASH_THEME.systemInstruction,
+      temperature: 0.2,
+    },
+  }, 'flash-theme-extraction')) as any;
+
+  const text = response.text?.trim();
+  if (!text) throw new Error('Gemini returned no theme text');
+
+  const clean = text.replace(/```json|```/g, '').trim();
+  let parsed: Record<string, string>;
+  try {
+    parsed = JSON.parse(clean);
+  } catch {
+    throw new Error('Gemini returned invalid JSON for flash theme');
+  }
+
+  if (parsed.error) throw new Error(parsed.error);
+
+  return {
+    suggested_title:  parsed.suggested_title  ?? 'Untitled Theme',
+    style_family:     parsed.style_family     ?? '[X]',
+    palette_lock:     parsed.palette_lock     ?? '[X]',
+    motif_lock:       parsed.motif_lock       ?? '[X]',
+    line_weight_lock: parsed.line_weight_lock ?? '[X]',
+    shading_lock:     parsed.shading_lock     ?? '[X]',
+    composition_rules: parsed.composition_rules ?? '[X]',
+    raw_theme_lock:   parsed.raw_theme_lock   ?? '[X]',
+  };
 }

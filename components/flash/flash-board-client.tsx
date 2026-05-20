@@ -98,7 +98,34 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
 
-  const activeTheme = detail.themes.find(t => t.id === activeThemeId) ?? null;
+  const [extractingTheme, setExtractingTheme] = useState(false);
+  const [themeDetail, setThemeDetail] = useState<FlashTheme | null>(null);
+
+  const handleExtractTheme = async () => {
+    if (!selectedDesign || extractingTheme) return;
+    setExtractingTheme(true);
+    setStatus('EXTRACTING THEME...');
+    try {
+      const resp = await fetch(`/api/flash/boards/${detail.board.id}/themes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId: selectedDesign.asset_id }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Extraction failed');
+      // Add theme to local list and activate it
+      const newTheme: FlashTheme = data.theme;
+      detail.themes.unshift(newTheme);
+      setActiveThemeId(newTheme.id);
+      setThemeDetail(newTheme);
+      setStatus(`Theme "${newTheme.title}" extracted.`);
+      setTimeout(() => setStatus(''), 4000);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Extraction failed');
+    } finally {
+      setExtractingTheme(false);
+    }
+  };
   const filteredDesigns = activeThemeId
     ? designs.filter(d => d.flash_theme_id === activeThemeId)
     : designs;
@@ -304,10 +331,11 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
 
               <div className="pt-4 space-y-2">
                 <button
-                  className="w-full py-2.5 rounded-xl bg-tls-amber text-black text-[10px] font-black uppercase tracking-widest hover:bg-white transition-colors"
-                  onClick={() => setStatus('Extract theme — coming in step 2')}
+                  disabled={extractingTheme}
+                  className="w-full py-2.5 rounded-xl bg-tls-amber text-black text-[10px] font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-40"
+                  onClick={handleExtractTheme}
                 >
-                  Extract Theme
+                  {extractingTheme ? 'Extracting...' : 'Extract Theme'}
                 </button>
                 <button
                   className="w-full py-2.5 rounded-xl border border-white/10 text-white/50 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors"
@@ -339,6 +367,54 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
           </aside>
         )}
       </div>
+      {/* Theme detail modal */}
+      {themeDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setThemeDetail(null)} />
+          <div className="relative w-[min(560px,92vw)] max-h-[85vh] bg-tls-panel border border-tls-border rounded-2xl flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-white/[0.06] shrink-0">
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-[0.22em] text-tls-amber mb-1">Theme Extracted</div>
+                <div className="text-white font-black text-lg">{themeDetail.title}</div>
+              </div>
+              <button onClick={() => setThemeDetail(null)} className="text-white/30 hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-6 space-y-4 scrollbar-hide">
+              {([
+                ['Style Family',      themeDetail.style_family],
+                ['Palette',           themeDetail.palette_lock],
+                ['Motif Language',    themeDetail.motif_lock],
+                ['Line Weight',       themeDetail.line_weight_lock],
+                ['Shading',          themeDetail.shading_lock],
+                ['Composition Rules', themeDetail.composition_rules],
+              ] as [string, string | null][]).map(([label, value]) => (
+                <div key={label}>
+                  <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 mb-1">{label}</div>
+                  <div className="text-white/80 text-[12px] leading-relaxed bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3">
+                    {value ?? '[X]'}
+                  </div>
+                </div>
+              ))}
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 mb-1">Theme Lock (injected into generation)</div>
+                <div className="text-white/60 text-[11px] leading-relaxed bg-tls-amber/5 border border-tls-amber/20 rounded-xl px-4 py-3 italic">
+                  {themeDetail.raw_theme_lock ?? '[X]'}
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-white/[0.06] shrink-0">
+              <button
+                onClick={() => setThemeDetail(null)}
+                className="w-full py-3 rounded-xl bg-tls-amber text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
+              >
+                Use This Theme
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
