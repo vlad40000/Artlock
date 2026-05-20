@@ -580,7 +580,13 @@ export function StudioClient({ detail }: StudioClientProps) {
             <LayersDrawer detail={detail} previewAssetId={previewAssetId} setPreviewAssetId={setPreviewAssetId} onPromote={actions.handlePromoteToReference} />
           )}
           {activeDrawer === 'refs' && (
-            <RefsDrawer detail={detail} piece={piece} activePhaseId={activePhaseId} onSelect={actions.handleUpdateReference} onAddReference={actions.handleAddReference} />
+            <RefsDrawer
+              detail={detail} piece={piece} activePhaseId={activePhaseId}
+              onSelect={actions.handleUpdateReference}
+              onAddReference={actions.handleAddReference}
+              boardHiddenIds={boardHiddenIds}
+              onRestoreToBoard={(id) => setBoardHiddenIds(prev => prev.filter(h => h !== id))}
+            />
           )}
 
           <section className="tls-command">

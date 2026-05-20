@@ -194,13 +194,17 @@ export function LayersDrawer({ detail, previewAssetId, setPreviewAssetId, onProm
 
 // ── RefsDrawer ────────────────────────────────────────────────────────────────
 
-export function RefsDrawer({ detail, piece, activePhaseId, onSelect, onAddReference }: {
+export function RefsDrawer({ detail, piece, activePhaseId, onSelect, onAddReference, boardHiddenIds, onRestoreToBoard }: {
   detail: SessionDetailRecord | undefined;
   piece: PieceState;
   activePhaseId: DesignPhase;
   onSelect: (assetId: string) => void;
   onAddReference: () => void;
+  boardHiddenIds: string[];
+  onRestoreToBoard: (assetId: string) => void;
 }) {
+  const hiddenRefs = (detail?.projectReferences ?? []).filter(r => boardHiddenIds.includes(r.id));
+
   return (
     <aside className="tls-drawer">
       <div className="tls-drawer-header">
@@ -229,7 +233,7 @@ export function RefsDrawer({ detail, piece, activePhaseId, onSelect, onAddRefere
 
       <div className="tls-drawer-body scrollbar-hide">
         <div className="grid grid-cols-2 gap-2 p-2">
-          {detail?.projectReferences?.map((ref) => {
+          {detail?.projectReferences?.filter(r => !boardHiddenIds.includes(r.id)).map((ref) => {
             const activeRefs = piece.activeReferenceIds || [];
             const refIndex = activeRefs.indexOf(ref.id);
             const isBase = detail.referenceAsset?.id === ref.id;
@@ -263,6 +267,31 @@ export function RefsDrawer({ detail, piece, activePhaseId, onSelect, onAddRefere
             );
           })}
         </div>
+
+        {hiddenRefs.length > 0 && (
+          <div className="mt-4 px-2">
+            <div className="text-[9px] font-black uppercase tracking-[0.22em] text-white/25 mb-2 px-1">
+              Hidden from Board ({hiddenRefs.length})
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {hiddenRefs.map((ref) => (
+                <div key={ref.id} className="relative group aspect-square overflow-hidden rounded-xl border border-white/[0.06] opacity-50">
+                  {ref.blob_url && (
+                    <img src={ref.blob_url} className="absolute inset-0 w-full h-full object-cover grayscale" alt="hidden ref" />
+                  )}
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => onRestoreToBoard(ref.id)}
+                      className="px-3 py-1.5 rounded-full bg-white text-black text-[9px] font-black uppercase tracking-widest hover:bg-tls-amber transition-colors shadow-xl"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );
