@@ -182,7 +182,7 @@ export function StudioSidebar({
               Extract: 'Phase 1a: Verbatim lock extraction from reference image',
               Surgical: 'Phase 1b: Precise region-based edits and additions',
               Creative: 'Phase 1c: High-variance transformations and revisions',
-              Variant: 'Phase 3: Generate a locked flash sheet with linework, black and grey, and color/blackwork panels',
+              Variant: 'Phase 3: Flash Sheet — generate stencil-ready linework, black & grey, and color/blackwork production variants',
               Turnaround: 'Phase 2c: Generate alternate anatomical views of the locked design',
               Stencil: 'Phase 4a: Extract clean, high-contrast linework for physical stencil production',
               Mockup: 'Phase 5: Visualize the design on realistic human skin and anatomy',

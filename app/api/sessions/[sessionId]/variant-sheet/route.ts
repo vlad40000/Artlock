@@ -140,7 +140,15 @@ export async function POST(
 
     return NextResponse.json({
       status: 'succeeded',
-      artifacts: { editRunId, outputAssetId },
+      artifacts: {
+        outputAsset: {
+          id: outputAssetId,
+          blob_url: blobUrl,
+          width: outputDimensions.width ?? baseWidth,
+          height: outputDimensions.height ?? baseHeight,
+        },
+        editRunId,
+      },
       prompt_contract: {
         name: TATTOO_PHASE_3.name,
         version: TATTOO_PHASE_3.version,
