@@ -446,6 +446,13 @@ export function StudioClient({ detail }: StudioClientProps) {
             <span className="tls-topbar-title font-black text-white/92 tracking-[0.14em] uppercase">{operationLabel}</span>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => router.push('/flash')}
+              className="tls-topbar-icon !bg-transparent !border-0 text-white/30 hover:text-tls-amber transition-colors"
+              title="Flash Boards"
+            >
+              <Layers size={15} />
+            </button>
             <div className="tls-status-dot" />
             <button
               className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white"
