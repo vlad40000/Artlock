@@ -1,3 +1,5 @@
+'use client';
+
 interface StudioLoadErrorProps {
   title?: string;
   message?: string;
