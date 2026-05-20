@@ -1,40 +1,17 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import {
-  ArrowLeft,
-  Loader2,
-  Sparkles,
-  Wand2,
-  Activity,
-  LoaderCircle,
-  ShieldCheck,
-  Play,
-  Check,
-  Layers,
-  ImagePlus,
-  Plus,
-  Mic,
-  MicOff,
-  Maximize2,
-  Maximize,
-  X,
-  History,
-  CheckCircle2,
-  Microscope,
-  MessageSquareQuote,
-  Lock,
-  Download,
-  LayoutGrid,
-  MoveDiagonal,
-  Upload
-} from "lucide-react";
+  ArrowLeft, Loader2, Sparkles, Wand2, Activity, ShieldCheck, Play, Check,
+  Layers, ImagePlus, Plus, Mic, MicOff, Maximize2, Maximize, X, History,
+  CheckCircle2, Microscope, MessageSquareQuote, Lock, Download, LayoutGrid,
+  MoveDiagonal, Upload,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { SessionDetailRecord } from '@/lib/server/session-detail';
-import { derivePresetId, varianceToIntensity } from '@/lib/ai/generation-profiles';
+import { derivePresetId } from '@/lib/ai/generation-profiles';
 import { useStudioBootstrap } from './useStudioBootstrap';
 import { useStudioVoice } from './voice/use-studio-voice';
-import type { VoiceCommand } from './voice/voice-command-parser';
 import { useCanvasGestures } from '@/hooks/useCanvasGestures';
 import { Operation, operationAction } from './studio-sidebar';
 import { clientUploadAsset } from '@/lib/client/upload';
@@ -45,417 +22,18 @@ import { interpretSurgicalInstruction } from '@/lib/ai/surgical-interpreter';
 import { SurgicalDeltaOverlay } from './shared/surgical-delta-overlay';
 import { useStudioStore } from '@/lib/stores/studio-store';
 import type { PieceState, DesignPhase } from '@/types/domain';
-import type { OptimizeFieldKind } from '@/lib/ai/prompt-contracts/ai-optimize';
-
-// --- CONFIG ---
-const DEFAULT_MODE = 'Surgical Local';
-const DEFAULT_VARIANCE = 'Balanced';
-const DEFAULT_TATTOO_MODE = true;
-const DEFAULT_SYMMETRY_LOCK = false;
+// Split modules
+import { sanitizePersistedClientState, isRecord, DESIGN_PHASES } from './studio-types';
+import { RadialNode, PHASES } from './studio-atoms';
+import { StudioCommandDock } from './studio-command-dock';
+import {
+  PhaseSidebar, LocksDrawer, LayersDrawer, RefsDrawer,
+  ReferenceAssistHandle, ReferenceAssistDrawer,
+} from './studio-drawers';
+import { useStudioActions } from './useStudioActions';
 
 interface StudioClientProps {
   detail?: SessionDetailRecord;
-}
-
-
-type PersistedStudioClientState = {
-  piece?: Partial<PieceState>;
-  past?: Partial<PieceState>[];
-  future?: Partial<PieceState>[];
-  operation?: Operation;
-  activeDrawer?: string | null;
-  brushSize?: number;
-  maskMode?: 'draw' | 'erase';
-  request?: string;
-  maskAssetId?: string | null;
-  regionHint?: string | null;
-  maskType?: 'include' | 'exclude';
-  showMask?: boolean;
-  dockPosition?: { x: number; y: number };
-  dockItems?: string[];
-  activePhase?: DesignPhase;
-  previewAssetId?: string | null;
-};
-
-const DESIGN_PHASES = new Set<DesignPhase>([
-  'reference',
-  'extract',
-  'surgical',
-  'creative',
-  'variants',
-  'stencil',
-  'marketing',
-  'mockup',
-]);
-
-const OPERATIONS = new Set<Operation>([
-  'Extract',
-  'Surgical',
-  'Creative',
-  'Variant',
-  'Stencil',
-  'Mockup',
-  'Turnaround',
-  'QA',
-]);
-
-const DOCK_ACTIONS = new Set(['menu', 'locks', 'refs', 'layers', 'qa', 'export', 'relock', 'mask', 'undo', 'redo']);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function optionalString(value: unknown): string | null | undefined {
-  return typeof value === 'string' ? value : value === null ? null : undefined;
-}
-
-function optionalPercent(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? Math.max(0, Math.min(100, value))
-    : undefined;
-}
-
-function sanitizePersistedClientState(value: unknown): PersistedStudioClientState {
-  if (!isRecord(value)) return {};
-
-  const piece = isRecord(value.piece) ? value.piece as Partial<PieceState> : undefined;
-  const past = Array.isArray(value.past) ? value.past.filter(isRecord) as Partial<PieceState>[] : undefined;
-  const future = Array.isArray(value.future) ? value.future.filter(isRecord) as Partial<PieceState>[] : undefined;
-  const operation = typeof value.operation === 'string' && OPERATIONS.has(value.operation as Operation)
-    ? value.operation as Operation
-    : undefined;
-  const maskMode = value.maskMode === 'draw' || value.maskMode === 'erase' ? value.maskMode : undefined;
-  const maskType = value.maskType === 'include' || value.maskType === 'exclude' ? value.maskType : undefined;
-  const activePhase = typeof value.activePhase === 'string' && DESIGN_PHASES.has(value.activePhase as DesignPhase)
-    ? value.activePhase as DesignPhase
-    : undefined;
-  const dockPosition = isRecord(value.dockPosition)
-    && typeof value.dockPosition.x === 'number'
-    && typeof value.dockPosition.y === 'number'
-    && Number.isFinite(value.dockPosition.x)
-    && Number.isFinite(value.dockPosition.y)
-      ? { x: value.dockPosition.x, y: value.dockPosition.y }
-      : undefined;
-  const dockItems = Array.isArray(value.dockItems)
-    ? value.dockItems.filter((item): item is string => typeof item === 'string' && DOCK_ACTIONS.has(item)).slice(0, 8)
-    : undefined;
-
-  return {
-    piece,
-    past,
-    future,
-    operation,
-    activeDrawer: optionalString(value.activeDrawer),
-    brushSize: optionalPercent(value.brushSize),
-    maskMode,
-    request: typeof value.request === 'string' ? value.request : undefined,
-    maskAssetId: optionalString(value.maskAssetId),
-    regionHint: optionalString(value.regionHint),
-    maskType,
-    showMask: typeof value.showMask === 'boolean' ? value.showMask : undefined,
-    dockPosition,
-    dockItems,
-    activePhase,
-    previewAssetId: optionalString(value.previewAssetId),
-  };
-}
-
-// --- SUB-COMPONENTS ---
-
-function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "green" | "amber" | "red" | "blue" }) {
-  const styles = {
-    neutral: "border-white/10 bg-white/[0.07] text-white/70",
-    green: "border-tls-emerald/30 bg-tls-emerald/15 text-tls-emerald",
-    amber: "border-tls-amber/30 bg-tls-amber/15 text-tls-amber",
-    red: "border-red-400/30 bg-red-400/15 text-red-200",
-    blue: "border-tls-sky/30 bg-tls-sky/15 text-tls-sky",
-  };
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.22em] bg-tls-panel border border-tls-border backdrop-blur-tls-28 shadow-tls-panel ${styles[tone]}`}>
-      {children}
-    </span>
-  );
-}
-
-function IconButton({ children, active, onClick, title }: { children: React.ReactNode; active?: boolean; onClick?: () => void; title?: string }) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      className={`grid h-10 w-10 place-items-center rounded-full text-sm font-black transition-all bg-tls-panel border border-tls-border backdrop-blur-tls-28 shadow-tls-panel ${active
-          ? "!border-tls-amber !bg-tls-amber text-black shadow-[0_0_28px_rgba(251,191,36,0.28)]"
-          : "text-white/65 hover:bg-white/15 hover:text-white"
-        }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-const PHASES: { id: DesignPhase; code: string; label: string; kind: string; op: string; icon: React.ReactNode }[] = [
-  { id: "reference", code: "REF", label: "Reference Board", kind: "intake", op: "Extract", icon: <ImagePlus size={16} /> },
-  { id: "extract", code: "LOCK", label: "Locks Extraction", kind: "read", op: "Extract", icon: <ShieldCheck size={16} /> },
-  { id: "surgical", code: "SRG", label: "Surgical Delta", kind: "edit", op: "Surgical", icon: <Activity size={16} /> },
-  { id: "creative", code: "CRT", label: "Creative Pivot", kind: "edit", op: "Creative", icon: <Sparkles size={16} /> },
-  { id: "variants", code: "VAR", label: "Variants", kind: "build", op: "Variant", icon: <Layers size={16} /> },
-  { id: "stencil", code: "STNC", label: "Stencil", kind: "build", op: "Stencil", icon: <Download size={16} /> },
-  { id: "mockup", code: "MOCK", label: "Mockup", kind: "mock", op: "Mockup", icon: <Maximize size={16} /> },
-];
-
-function RadialNode({ label, icon, angle, radius, primary, onClick }: { label: string; icon: React.ReactNode; angle: number; radius: number; primary?: boolean; onClick: () => void }) {
-  const rad = (angle * Math.PI) / 180;
-  const x = Math.cos(rad) * radius;
-  const y = Math.sin(rad) * radius;
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
-      }}
-      className={`absolute left-1/2 top-1/2 flex items-center justify-center gap-2 w-32 h-11 px-4 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all shadow-2xl z-20 ${
-        primary
-          ? "bg-tls-amber border-tls-amber text-black hover:bg-white hover:scale-110"
-          : "bg-[#2a2a2c]/90 border-white/10 text-white/80 hover:bg-white/10 backdrop-blur-md"
-      }`}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function StudioCommandDock({
-  activeDrawer,
-  setActiveDrawer,
-  activePhase,
-  runPhaseAction,
-  chrome,
-  setChrome,
-  setShowQuickMenu,
-  dockPosition,
-  setDockPosition,
-  dockItems,
-  setDockItems,
-  onRunAudit,
-  onOpenExport,
-  onRelock,
-  onToggleMask,
-}: {
-  activeDrawer: string | null;
-  setActiveDrawer: (drawer: string | null) => void;
-  activePhase: string;
-  runPhaseAction: () => void;
-  chrome: boolean;
-  setChrome: (chrome: boolean) => void;
-  setShowQuickMenu: React.Dispatch<React.SetStateAction<boolean>>;
-  dockPosition: { x: number; y: number };
-  setDockPosition: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
-  dockItems: string[];
-  setDockItems: React.Dispatch<React.SetStateAction<string[]>>;
-  onRunAudit?: () => void;
-  onOpenExport?: () => void;
-  onRelock?: () => void;
-  onToggleMask?: () => void;
-}) {
-  const [isConfiguring, setIsConfiguring] = useState(false);
-  const [viewportWidth, setViewportWidth] = useState<number | null>(null);
-  const phase = PHASES.find((item) => item.id === activePhase) || PHASES[0];
-  const openDockControlsLeft = viewportWidth === null || dockPosition.x > viewportWidth / 2;
-  const dockPopoverSideClass = openDockControlsLeft ? "right-[58px]" : "left-[58px]";
-  const dockTooltipSideClass = openDockControlsLeft ? "right-[58px]" : "left-[58px]";
-
-  useEffect(() => {
-    const updateViewportWidth = () => setViewportWidth(window.innerWidth);
-    updateViewportWidth();
-    window.addEventListener('resize', updateViewportWidth);
-    return () => window.removeEventListener('resize', updateViewportWidth);
-  }, []);
-
-  const ALL_ACTIONS: Record<string, { label: string; icon: string }> = {
-    menu: { label: "Quick Menu", icon: "▦" },
-    locks: { label: "Locks", icon: "▣" },
-    refs: { label: "References", icon: "▧" },
-    layers: { label: "Deltas", icon: "▤" },
-    qa: { label: "Audit", icon: "◉" },
-    export: { label: "Export", icon: "⤓" },
-    relock: { label: "Sync Lock", icon: "🔃" },
-    mask: { label: "Area", icon: "🎯" },
-    undo: { label: "Undo", icon: "⎌" },
-    redo: { label: "Redo", icon: "⎍" },
-  };
-
-  const canRun = phase.id !== "reference";
-
-  const toggleDrawer = (drawer: string) => {
-    setActiveDrawer(activeDrawer === drawer ? null : drawer);
-  };
-
-  const handleActionClick = (id: string) => {
-    if (isConfiguring) return; // handled by swap logic
-    switch(id) {
-      case 'menu': setShowQuickMenu(true); break;
-      case 'locks': toggleDrawer('locks'); break;
-      case 'refs': toggleDrawer('refs'); break;
-      case 'layers': toggleDrawer('layers'); break;
-      case 'qa': onRunAudit?.(); break;
-      case 'export': onOpenExport?.(); break;
-      case 'relock': onRelock?.(); break;
-      case 'mask': onToggleMask?.(); break;
-      case 'undo': useStudioStore.getState().undo(); break;
-      case 'redo': useStudioStore.getState().redo(); break;
-      default: toggleDrawer(id);
-    }
-  };
-
-  const swapAction = (index: number, newActionId: string) => {
-    const next = [...dockItems];
-    next[index] = newActionId;
-    setDockItems(next);
-  };
-
-  // Draggable logic
-  const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
-
-  const onMouseDown = (e: React.MouseEvent) => {
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      initialX: dockPosition.x,
-      initialY: dockPosition.y,
-    };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  };
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    dragRef.current = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      initialX: dockPosition.x,
-      initialY: dockPosition.y,
-    };
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend', onTouchEnd);
-  };
-
-  const onMouseMove = useCallback((e: MouseEvent) => {
-    if (!dragRef.current) return;
-    const dx = e.clientX - dragRef.current.startX;
-    const dy = e.clientY - dragRef.current.startY;
-    setDockPosition({
-      x: dragRef.current.initialX + dx,
-      y: dragRef.current.initialY + dy,
-    });
-  }, [setDockPosition]);
-
-  const onTouchMove = useCallback((e: TouchEvent) => {
-    if (!dragRef.current) return;
-    e.preventDefault(); // Prevent scrolling while dragging
-    const touch = e.touches[0];
-    const dx = touch.clientX - dragRef.current.startX;
-    const dy = touch.clientY - dragRef.current.startY;
-    setDockPosition({
-      x: dragRef.current.initialX + dx,
-      y: dragRef.current.initialY + dy,
-    });
-  }, [setDockPosition]);
-
-  const onMouseUp = useCallback(() => {
-    dragRef.current = null;
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
-  }, [onMouseMove]);
-
-  const onTouchEnd = useCallback(() => {
-    dragRef.current = null;
-    window.removeEventListener('touchmove', onTouchMove);
-    window.removeEventListener('touchend', onTouchEnd);
-  }, [onTouchMove]);
-
-  return (
-    <aside 
-      style={{ left: dockPosition.x, top: dockPosition.y, transform: 'translateY(-50%)' }}
-      className="absolute z-50 flex flex-col items-center gap-2 rounded-full border border-white/10 bg-black/42 p-2 shadow-2xl backdrop-blur-2xl"
-    >
-      <div 
-        onMouseDown={onMouseDown}
-        onTouchStart={onTouchStart}
-        className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-white/45 cursor-move active:scale-95 transition-transform" 
-        title="Drag to reposition"
-      >
-        <Activity size={16} />
-      </div>
-
-      {dockItems.map((id, index) => {
-        const item = ALL_ACTIONS[id] || ALL_ACTIONS.menu;
-        const isActive = activeDrawer === id;
-
-        return (
-          <div key={`${id}-${index}`} className="relative group">
-            <button
-              title={item.label}
-              onClick={() => handleActionClick(id)}
-              className={`relative grid h-12 w-12 place-items-center rounded-full border text-sm font-black transition-all active:scale-95 ${
-                isActive
-                  ? "border-amber-300 bg-amber-300 text-black shadow-[0_0_28px_rgba(251,191,36,0.28)]"
-                  : "border-white/10 bg-white/[0.06] text-white/70 hover:bg-white hover:text-black"
-              }`}
-            >
-              <span>{item.icon}</span>
-              
-              {!isConfiguring && (
-                <span className={`pointer-events-none absolute ${dockTooltipSideClass} top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100`}>
-                  {item.label}
-                </span>
-              )}
-            </button>
-
-            {isConfiguring && (
-              <div className={`absolute ${dockPopoverSideClass} top-1/2 -translate-y-1/2 flex gap-1 p-1 rounded-xl bg-black/80 border border-white/10 backdrop-blur-xl z-[60] shadow-2xl`}>
-                {Object.keys(ALL_ACTIONS).map(actionId => (
-                  <button
-                    key={actionId}
-                    onClick={() => swapAction(index, actionId)}
-                    className={`h-8 w-8 rounded-lg grid place-items-center transition-colors ${id === actionId ? 'bg-tls-amber text-black' : 'text-white/40 hover:bg-white/10'}`}
-                    title={ALL_ACTIONS[actionId].label}
-                  >
-                    {ALL_ACTIONS[actionId].icon}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      <div className="my-1 h-px w-8 bg-white/10" />
-
-      <button
-        title={canRun ? "Run phase action" : "Read-only phase"}
-        onClick={runPhaseAction}
-        disabled={!canRun}
-        className={`group relative grid h-12 w-12 place-items-center rounded-full border text-sm font-black transition-all active:scale-95 ${
-          canRun
-            ? "border-white/20 bg-white text-black hover:bg-amber-300"
-            : "border-white/10 bg-white/[0.04] text-white/25"
-        }`}
-      >
-        <span>▶</span>
-        <span className={`pointer-events-none absolute ${dockTooltipSideClass} top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-white opacity-0 shadow-xl backdrop-blur-xl transition group-hover:opacity-100`}>
-          {canRun ? "Run" : "Read Only"}
-        </span>
-      </button>
-
-      <button
-        title="Configure Dock"
-        onClick={() => setIsConfiguring(!isConfiguring)}
-        className={`grid h-8 w-8 place-items-center rounded-full border text-[10px] transition-all ${isConfiguring ? 'bg-tls-amber border-tls-amber text-black' : 'border-white/5 bg-white/[0.02] text-white/20 hover:text-white'}`}
-      >
-        ⚙
-      </button>
-    </aside>
-  );
 }
 
 export function StudioClient({ detail }: StudioClientProps) {
@@ -465,44 +43,26 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [canvasScale, setCanvasScale] = useState(1);
   const [canvasRotation, setCanvasRotation] = useState(0);
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
+
   const persistedClientState = useMemo(
     () => sanitizePersistedClientState(detail?.session.client_state),
     [detail?.session.client_state],
   );
 
-  // UI State from Global Store
+  // ── Global store ────────────────────────────────────────────────────────────
   const {
-    busy,
-    setBusy,
-    status,
-    setStatus,
-    chrome,
-    setChrome,
-    operation,
-    setOperation,
-    activeDrawer,
-    setActiveDrawer,
-    present: piece,
-    past: pastPiece,
-    future: futurePiece,
-    pushState: pushPiece,
-    updatePresent,
-    undo: undoPiece,
-    redo: redoPiece,
-    resetStore,
-    brushSize,
-    setBrushSize,
-    maskMode,
-    setMaskMode,
-    request,
-    setRequest,
+    busy, setBusy, status, setStatus, chrome, setChrome,
+    operation, setOperation, activeDrawer, setActiveDrawer,
+    present: piece, past: pastPiece, future: futurePiece,
+    pushState: pushPiece, updatePresent, undo: undoPiece, redo: redoPiece,
+    resetStore, brushSize, setBrushSize, maskMode, setMaskMode, request, setRequest,
   } = useStudioStore();
 
+  // ── Local UI state ──────────────────────────────────────────────────────────
   const [message, setMessage] = useState<{ text: string; type: 'info' | 'error' } | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [showMask, setShowMask] = useState(() => persistedClientState.showMask ?? false);
-  const [showLockDetails, setShowLockDetails] = useState<string | null>(null);
   const [maskAssetId, setMaskAssetId] = useState<string | null>(() => persistedClientState.maskAssetId ?? null);
   const [regionHint, setRegionHint] = useState<string | null>(() => persistedClientState.regionHint ?? null);
   const [maskType, setMaskType] = useState<'include' | 'exclude'>(() => persistedClientState.maskType ?? 'include');
@@ -510,56 +70,51 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [qaReport, setQaReport] = useState<TattooQAReport | null>(null);
   const [dockPosition, setDockPosition] = useState(() => persistedClientState.dockPosition ?? { x: 1400, y: 400 });
   const [dockItems, setDockItems] = useState(() => persistedClientState.dockItems?.length ? persistedClientState.dockItems : ['menu', 'locks', 'refs', 'layers', 'undo', 'redo']);
-
-  // Piece State & History
-  const initialPiece: PieceState = useMemo(() => {
-    const savedPiece = persistedClientState.piece ?? {};
-    const referenceImages = detail?.projectReferences?.length
-      ? detail.projectReferences.map((asset) => asset.blob_url)
-      : detail?.referenceAsset
-        ? [detail.referenceAsset.blob_url]
-        : [];
-
-    return {
-      id: detail?.project?.id,
-      clientId: detail?.project?.id, // Fallback
-      referenceImages,
-      baseImage: detail?.latestApprovedAsset?.blob_url ?? savedPiece.baseImage ?? detail?.referenceAsset?.blob_url ?? null,
-      designId: detail?.activeLock?.design_id_lock ?? savedPiece.designId ?? null,
-      styleId: detail?.activeLock?.style_id_lock ?? savedPiece.styleId ?? null,
-      lockArtifacts: savedPiece.lockArtifacts ?? null,
-      lockedImage: detail?.latestApprovedAsset?.blob_url ?? savedPiece.lockedImage ?? detail?.referenceAsset?.blob_url ?? null,
-      locksExtracted: !!detail?.activeLock,
-      locksActive: !!detail?.activeLock,
-      editLayers: Array.isArray(savedPiece.editLayers) ? savedPiece.editLayers : [],
-      variants: Array.isArray(savedPiece.variants) ? savedPiece.variants : [],
-      stencil: savedPiece.stencil ?? null,
-      skinMockup: savedPiece.skinMockup ?? null,
-      activePhase: persistedClientState.activePhase ?? savedPiece.activePhase ?? (detail?.activeLock ? 'surgical' : 'reference'),
-      request: persistedClientState.request ?? savedPiece.request ?? '',
-      activeReferenceIds: Array.isArray(savedPiece.activeReferenceIds) ? savedPiece.activeReferenceIds : [],
-      referencePromptParams: isRecord(savedPiece.referencePromptParams) ? savedPiece.referencePromptParams as PieceState['referencePromptParams'] : {},
-      maskAssetId: persistedClientState.maskAssetId ?? savedPiece.maskAssetId ?? null,
-      regionHint: persistedClientState.regionHint ?? savedPiece.regionHint ?? null,
-      maskType: persistedClientState.maskType ?? savedPiece.maskType ?? 'include'
-    };
-  }, [detail, persistedClientState]);
-
+  const [driftError, setDriftError] = useState<string | null>(null);
+  const [storeHydrated, setStoreHydrated] = useState(false);
   const isMounted = useRef(false);
   const lastSavedClientStateRef = useRef<string | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [storeHydrated, setStoreHydrated] = useState(false);
 
-  // Initialize store on mount
+  // ── Piece hydration ─────────────────────────────────────────────────────────
+  const initialPiece: PieceState = useMemo(() => {
+    const saved = persistedClientState.piece ?? {};
+    const referenceImages = detail?.projectReferences?.length
+      ? detail.projectReferences.map(a => a.blob_url)
+      : detail?.referenceAsset ? [detail.referenceAsset.blob_url] : [];
+    return {
+      id: detail?.project?.id,
+      clientId: detail?.project?.id,
+      referenceImages,
+      baseImage: detail?.latestApprovedAsset?.blob_url ?? saved.baseImage ?? detail?.referenceAsset?.blob_url ?? null,
+      designId: detail?.activeLock?.design_id_lock ?? saved.designId ?? null,
+      styleId: detail?.activeLock?.style_id_lock ?? saved.styleId ?? null,
+      lockArtifacts: saved.lockArtifacts ?? null,
+      lockedImage: detail?.latestApprovedAsset?.blob_url ?? saved.lockedImage ?? detail?.referenceAsset?.blob_url ?? null,
+      locksExtracted: !!detail?.activeLock,
+      locksActive: !!detail?.activeLock,
+      editLayers: Array.isArray(saved.editLayers) ? saved.editLayers : [],
+      variants: Array.isArray(saved.variants) ? saved.variants : [],
+      stencil: saved.stencil ?? null,
+      skinMockup: saved.skinMockup ?? null,
+      activePhase: persistedClientState.activePhase ?? saved.activePhase ?? (detail?.activeLock ? 'surgical' : 'reference'),
+      request: persistedClientState.request ?? saved.request ?? '',
+      activeReferenceIds: Array.isArray(saved.activeReferenceIds) ? saved.activeReferenceIds : [],
+      referencePromptParams: isRecord(saved.referencePromptParams) ? saved.referencePromptParams as PieceState['referencePromptParams'] : {},
+      maskAssetId: persistedClientState.maskAssetId ?? saved.maskAssetId ?? null,
+      regionHint: persistedClientState.regionHint ?? saved.regionHint ?? null,
+      maskType: persistedClientState.maskType ?? saved.maskType ?? 'include',
+    };
+  }, [detail, persistedClientState]);
+
   useEffect(() => {
     if (!isMounted.current) {
-      resetStore(initialPiece, persistedClientState.past as any, persistedClientState.future as any);
+      resetStore(initialPiece, persistedClientState.past as PieceState[] | undefined, persistedClientState.future as PieceState[] | undefined);
       setOperation(persistedClientState.operation ?? (initialPiece.activePhase === 'surgical' ? 'Surgical' : 'Extract'));
       setActiveDrawer(persistedClientState.activeDrawer ?? null);
       setBrushSize(persistedClientState.brushSize ?? 40);
       setMaskMode(persistedClientState.maskMode ?? 'draw');
       isMounted.current = true;
-      // Position dock on the right
       if (!persistedClientState.dockPosition && typeof window !== 'undefined') {
         setDockPosition({ x: window.innerWidth - 80, y: 400 });
       }
@@ -580,680 +135,51 @@ export function StudioClient({ detail }: StudioClientProps) {
     }
   }, [initialPiece, persistedClientState, resetStore, setActiveDrawer, setBrushSize, setMaskMode, setOperation]);
 
-  // Deprecated: useHistory is being phased out in favor of useStudioStore
-  // const { ... } = useHistory<PieceState>(initialPiece, 100);
-
-  // Workflow Gates
-  const gates: Record<string, { status: string; unmet: { key: string; label: string }[] }> = useMemo(() => {
-    const isReferenceDone = (piece?.referenceImages?.length || 0) > 0 || !!piece?.designSurfaceDocument;
-    const isBaseSelected = !!piece.baseImage;
-    const isLocked = !!piece.locksActive;
-
-    return {
-      reference: { status: 'open', unmet: [] },
-      extract: { 
-        status: isBaseSelected ? 'open' : 'locked', 
-        unmet: isBaseSelected ? [] : [{ key: 'base', label: 'Select a Base Image' }] 
-      },
-      surgical: { 
-        status: isLocked ? 'open' : 'locked', 
-        unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] 
-      },
-      creative: { 
-        status: isLocked ? 'open' : 'locked', 
-        unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] 
-      },
-      variants: { status: isLocked ? 'open' : 'locked', unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] },
-      stencil: { status: isLocked ? 'open' : 'locked', unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] },
-      mockup: { status: isLocked ? 'open' : 'locked', unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] },
-      marketing: { status: isLocked ? 'open' : 'locked', unmet: isLocked ? [] : [{ key: 'extract', label: 'Extract Design Locks' }] },
-    };
-  }, [piece]);
-
-  const activePhaseId = piece.activePhase || 'reference';
-  const setActivePhaseId = (phase: DesignPhase) => {
-    if (gates[phase].status === 'open') {
-      pushPiece({ ...piece, activePhase: phase });
-    }
-  };
-
-  // Sync history back to local states
+  // Sync piece → local state mirrors
   useEffect(() => {
     if (piece.request !== undefined && piece.request !== request) setRequest(piece.request);
     if (piece.maskAssetId !== undefined && piece.maskAssetId !== maskAssetId) setMaskAssetId(piece.maskAssetId);
     if (piece.maskType !== undefined && piece.maskType !== maskType) setMaskType(piece.maskType);
     if (piece.regionHint !== undefined && piece.regionHint !== regionHint) setRegionHint(piece.regionHint);
+  }, [piece]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Workflow gates ──────────────────────────────────────────────────────────
+  const gates = useMemo(() => {
+    const isBaseSelected = !!piece.baseImage;
+    const isLocked = !!piece.locksActive;
+    const gated = (open: boolean, key: string, label: string) => ({
+      status: open ? 'open' : 'locked',
+      unmet: open ? [] : [{ key, label }],
+    });
+    return {
+      reference: { status: 'open', unmet: [] },
+      extract:   gated(isBaseSelected, 'base', 'Select a Base Image'),
+      surgical:  gated(isLocked, 'extract', 'Extract Design Locks'),
+      creative:  gated(isLocked, 'extract', 'Extract Design Locks'),
+      variants:  gated(isLocked, 'extract', 'Extract Design Locks'),
+      stencil:   gated(isLocked, 'extract', 'Extract Design Locks'),
+      mockup:    gated(isLocked, 'extract', 'Extract Design Locks'),
+      marketing: gated(isLocked, 'extract', 'Extract Design Locks'),
+    };
   }, [piece]);
 
-  // Interpret current instruction
-  const surgicalInfo = useMemo(() => {
-    if (operation !== 'Surgical') return null;
-    return interpretSurgicalInstruction(request);
-  }, [request, operation]);
+  const activePhaseId = piece.activePhase || 'reference';
+  const setActivePhaseId = (phase: DesignPhase) => {
+    if (gates[phase].status === 'open') pushPiece({ ...piece, activePhase: phase });
+  };
 
-  // Drift validation state (local override for immediate feedback)
-  const [driftError, setDriftError] = useState<string | null>(null);
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const surgicalInfo = useMemo(() => operation === 'Surgical' ? interpretSurgicalInstruction(request) : null, [request, operation]);
 
   const activeSurgicalWarning = useMemo(() => {
     if (operation !== 'Surgical') return null;
     return getSurgicalWarning({
-      maskProvided: !!maskAssetId,
-      maskBBoxExists: !!maskAssetId, // Simple check for now
+      maskProvided: !!maskAssetId, maskBBoxExists: !!maskAssetId,
       targetRegion: surgicalInfo?.targetRegion || regionHint,
       driftOutsideMask: driftError?.includes('outside mask'),
       driftOutsideTarget: driftError?.includes('outside target region'),
     });
   }, [operation, maskAssetId, surgicalInfo, regionHint, driftError]);
-
-  const pushCheckpoint = useCallback(() => {
-    pushPiece({
-      ...piece,
-      request,
-      maskAssetId,
-      maskType,
-      regionHint,
-    });
-  }, [piece, request, maskAssetId, maskType, regionHint, pushPiece]);
-
-  const syncClientState = useMemo(() => ({
-    piece: {
-      ...piece,
-      request,
-      maskAssetId,
-      maskType,
-      regionHint,
-    },
-    operation,
-    activeDrawer,
-    brushSize,
-    maskMode,
-    request,
-    maskAssetId,
-    regionHint,
-    maskType,
-    showMask,
-    dockPosition,
-    dockItems,
-    previewAssetId,
-    activePhase: piece.activePhase,
-    past: pastPiece,
-    future: futurePiece,
-  }), [
-    piece,
-    pastPiece,
-    futurePiece,
-    request,
-    maskAssetId,
-    maskType,
-    regionHint,
-    operation,
-    activeDrawer,
-    brushSize,
-    maskMode,
-    showMask,
-    dockPosition,
-    dockItems,
-    previewAssetId,
-  ]);
-
-  useEffect(() => {
-    if (!detail?.session.id || !storeHydrated) return;
-
-    const serialized = JSON.stringify(syncClientState);
-    if (lastSavedClientStateRef.current === null) {
-      lastSavedClientStateRef.current = serialized;
-      return;
-    }
-
-    if (lastSavedClientStateRef.current === serialized) return;
-
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-    }
-
-    autosaveTimerRef.current = setTimeout(() => {
-      lastSavedClientStateRef.current = serialized;
-      fetch(`/api/sessions/${detail.session.id}/sync`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...syncClientState,
-          updatedAt: new Date().toISOString(),
-        }),
-      }).catch((error) => {
-        console.warn('[studio-sync] failed to persist client state', error);
-      });
-    }, 900);
-
-    return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-      }
-    };
-  }, [detail?.session.id, storeHydrated, syncClientState]);
-
-  const canvasTransformStyle = useMemo<React.CSSProperties>(() => ({
-    transform: `translate(-50%, -50%) translate(${Math.round(canvasPan.x)}px, ${Math.round(canvasPan.y)}px) scale(${canvasScale}) rotate(${canvasRotation}deg)`,
-    transformOrigin: 'center center',
-    transition: busy ? 'none' : 'transform 0.1s ease-out'
-  }), [canvasPan.x, canvasPan.y, canvasScale, canvasRotation, busy]);
-
-  const operationLabel = useMemo(() => {
-    switch (operation) {
-      case 'Extract': return 'Extract Locks';
-      case 'Surgical': return 'Surgical Edit';
-      case 'Creative': return 'Creative Delta';
-      case 'Variant': return 'Variant Sheet';
-      case 'Stencil': return 'Stencil Export';
-      case 'Mockup': return 'Placement Fit';
-      default: return 'Studio';
-    }
-  }, [operation]);
-
-  const { bootstrap, batchUpload } = useStudioBootstrap();
-
-  const resetCanvasView = useCallback(() => {
-    setCanvasScale(1);
-    setCanvasPan({ x: 0, y: 0 });
-    setCanvasRotation(0);
-    setStatus('Canvas snapped to fit.');
-  }, []);
-
-  const handleToggleFullscreen = useCallback(() => {
-    setChrome(!chrome);
-    setActiveDrawer(null);
-    
-    try {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-        setStatus('Full-screen mode enabled.');
-      } else if (document.exitFullscreen) {
-        document.exitFullscreen();
-        setStatus('Full-screen mode disabled.');
-      }
-    } catch (e) {
-      console.warn('Fullscreen API error:', e);
-    }
-  }, []);
-
-  useCanvasGestures(
-    canvasGestureRef,
-    { scale: canvasScale, pan: canvasPan, rotation: canvasRotation },
-    {
-      onZoom: setCanvasScale,
-      onPan: setCanvasPan,
-      onRotate: setCanvasRotation,
-      onToggleFullScreen: handleToggleFullscreen,
-      onUndo: () => {
-        const prev = undoPiece();
-        if (prev) {
-          setStatus('Undo executed.');
-          setMessage({ text: 'Undo', type: 'info' });
-        }
-      },
-      onRedo: () => {
-        const next = redoPiece();
-        if (next) {
-          setStatus('Redo executed.');
-          setMessage({ text: 'Redo', type: 'info' });
-        }
-      },
-      onLongPress: () => {
-        setStatus('Color picker gesture received. Eyedropper UI pending.');
-      },
-      onDoubleTap: resetCanvasView,
-      onFitToScreen: resetCanvasView,
-      onCopyPasteMenu: () => {
-        setStatus('Copy/Paste gesture received. Actions panel pending.');
-        setMessage({ text: 'Copy/Paste menu gesture', type: 'info' });
-      },
-      onClearLayer: () => {
-        pushCheckpoint();
-        setRequest('');
-        setMaskAssetId(null);
-        setRegionHint(null);
-        setShowMask(false);
-        setStatus('Layer cleared.');
-        setMessage({ text: 'Layer Cleared (Scrub)', type: 'info' });
-        
-        setTimeout(() => {
-          pushPiece({
-            ...piece,
-            request: '',
-            maskAssetId: null,
-            regionHint: null,
-          });
-        }, 50);
-      },
-    },
-  );
-
-  const handleVoiceCommand = useCallback((command: VoiceCommand) => {
-    switch (command.type) {
-      case 'SET_OPERATION':
-        setOperation(command.value as Operation);
-        setStatus(`Switched to ${command.value}`);
-        break;
-      case 'OPEN_DRAWER':
-        setActiveDrawer(command.value as string);
-        setStatus(`Opened ${command.value}`);
-        break;
-      case 'FILL_REQUEST':
-        setRequest(command.value as string);
-        break;
-      case 'TOGGLE_MASK':
-        setShowMask(!!command.value);
-        setStatus(command.value ? 'Masking enabled.' : 'Masking disabled.');
-        break;
-      case 'SET_MASK_TYPE': {
-        const val = command.value as unknown as { type: 'include' | 'exclude', subject?: string };
-        setMaskType(val.type);
-        if (val.subject) {
-          setRegionHint(val.subject);
-          setStatus(`Target area: ${val.subject} (${val.type})`);
-        } else {
-          setStatus(`Mask mode: ${val.type}`);
-        }
-        break;
-      }
-    }
-  }, []);
-
-  const {
-    status: voiceStatus,
-    toggleListening: voiceToggle,
-  } = useStudioVoice({
-    onCommand: handleVoiceCommand,
-    onTranscript: (text) => setRequest(text),
-  });
-
-  const handleAddReference = () => uploadInputRef.current?.click();
-
-  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const fileArray = Array.from(files);
-      
-      if (!piece.id) {
-        setBusy('INITIALIZING SESSION');
-        try {
-          const firstFile = fileArray[0];
-          const { projectId, sessionId } = await bootstrap(firstFile, {
-            projectId: detail?.project.id,
-            sessionId: detail?.session.id,
-          });
-          
-          if (fileArray.length > 1 && projectId) {
-            const remainingFiles = fileArray.slice(1);
-            await batchUpload(remainingFiles, projectId);
-          }
-        } catch (err: any) {
-          setMessage({ text: `Bootstrap failed: ${err.message}`, type: 'error' });
-        } finally {
-          setBusy(null);
-          e.target.value = '';
-        }
-      } else {
-        await handleBatchUpload(files);
-        e.target.value = '';
-      }
-    }
-  };
-
-  const handleMicToggle = () => {
-    voiceToggle();
-    if (voiceStatus !== 'listening') {
-      setStatus('Listening — transcript will fill Client Request.');
-    } else {
-      setStatus('Voice stopped.');
-    }
-  };
-
-  const handleEnhancePrompt = async () => {
-    if (!request.trim() || busy) return;
-    setBusy('REFINING INSTRUCTION');
-    const locksContext = activeLocksList
-      .filter(l => l.value)
-      .map(l => `${l.name}: ${l.value}`)
-      .join('\n');
-
-    const kind: OptimizeFieldKind = 
-      operation === 'Surgical' ? 'surgical_change' : 
-      operation === 'Creative' ? 'creative_delta' : 
-      'general';
-
-    try {
-      const resp = await fetch('/api/ai/optimize-text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          originalText: request.trim(), 
-          fieldKind: kind,
-          locks: locksContext
-        }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Optimization failed');
-      setRequest(data.artifacts?.optimizedText ?? request.trim());
-      setStatus('Instruction refined.');
-    } catch (err: any) {
-      setStatus('Refinement failed.');
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleBatchUpload = async (files: FileList) => {
-    if (!piece.id) return;
-    setBusy('UPLOADING REFERENCES');
-    try {
-      const fileArray = Array.from(files);
-      const newAssetIds = await batchUpload(fileArray, piece.id);
-      
-      const newUrls = fileArray.map(f => URL.createObjectURL(f));
-      pushPiece({
-        ...piece,
-        referenceImages: [...newUrls, ...piece.referenceImages]
-      });
-      
-      setMessage({ text: `${files.length} references uploaded`, type: 'info' });
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleRun = async () => {
-    if (!detail?.session.id || !detail?.project.id) {
-      setStatus('Upload a reference image to start a studio session.');
-      return;
-    }
-
-    const phaseGate = gates[activePhaseId];
-    if (phaseGate.status === 'locked') {
-      setMessage({ text: `Phase locked: ${phaseGate.unmet[0]?.label ?? 'Complete the previous step'}`, type: 'error' });
-      return;
-    }
-
-    if (!displayAsset?.id) {
-      setStatus('Select a base reference before running.');
-      return;
-    }
-
-    if (!request.trim() && ['Surgical', 'Creative'].includes(operation)) {
-      setStatus('Add a client request before running.');
-      return;
-    }
-
-    const referenceAssetIds = piece.activeReferenceIds ?? [];
-    const editRequest = buildEditRequest(request);
-    const generationPresetId = derivePresetId(operation, DEFAULT_MODE, DEFAULT_VARIANCE);
-    setBusy(`RUNNING ${operation.toUpperCase()}`);
-    try {
-      let endpoint = '';
-      let body: Record<string, unknown> = {};
-
-      switch (operation) {
-        case 'Extract':
-          endpoint = `/api/sessions/${detail.session.id}/extract-locks`;
-          body = {
-            sourceAssetId: displayAsset.id,
-            tattooMode: DEFAULT_TATTOO_MODE,
-          };
-          break;
-        case 'Surgical':
-          endpoint = `/api/sessions/${detail.session.id}/surgical-edit`;
-            body = {
-              delta1: editRequest,
-              baseAssetId: displayAsset.id,
-              referenceAssetIds,
-              maskAssetId,
-              regionHint: surgicalInfo?.targetRegion || regionHint,
-              maskType,
-              tattooMode: DEFAULT_TATTOO_MODE,
-              generationPresetId,
-              variancePreset: DEFAULT_VARIANCE,
-            };
-          break;
-        case 'Creative':
-          endpoint = `/api/sessions/${detail.session.id}/creative-delta`;
-          body = {
-            transformation: editRequest,
-            intensity: varianceToIntensity(DEFAULT_VARIANCE),
-            baseAssetId: displayAsset.id,
-            referenceAssetIds,
-            transferMode: referenceAssetIds.length > 0 ? 'reference_transfer' : 'none',
-            maskAssetId,
-            maskType,
-            tattooMode: DEFAULT_TATTOO_MODE,
-            generationPresetId,
-            variancePreset: DEFAULT_VARIANCE,
-          };
-          break;
-        case 'Variant':
-          endpoint = `/api/sessions/${detail.session.id}/variant-sheet`;
-          body = {
-            baseAssetId: displayAsset.id,
-            constraints: request.trim() || null,
-            layout: 'single',
-            generationPresetId,
-            variancePreset: DEFAULT_VARIANCE,
-          };
-          break;
-        case 'Stencil':
-          endpoint = `/api/sessions/${detail.session.id}/stencil`;
-          body = {
-            baseAssetId: displayAsset.id,
-          };
-          break;
-        case 'Mockup':
-          endpoint = `/api/sessions/${detail.session.id}/mockup`;
-          body = {
-            baseAssetId: displayAsset.id,
-            placement: 'Forearm',
-            tattooMode: DEFAULT_TATTOO_MODE,
-          };
-          break;
-      }
-
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const data = await resp.json();
-      if (!resp.ok) {
-        if (data.error?.includes('Drift detected')) {
-          setDriftError(data.error);
-        }
-        throw new Error(data.error || 'Operation failed');
-      }
-
-      setRequest('');
-      setMessage({ text: `${operationAction(operation)} complete`, type: 'info' });
-      setStatus('Ready');
-      setDriftError(null);
-      
-      if (operation === 'Extract') {
-        pushPiece({
-          ...piece,
-          locksActive: true,
-          locksExtracted: true,
-          activePhase: 'surgical'
-        });
-        setOperation('Surgical');
-      } else if (data.artifacts?.outputAsset) {
-        pushPiece({
-          ...piece,
-          baseImage: data.artifacts.outputAsset.blob_url,
-          lastUpdate: new Date().toISOString()
-        });
-      }
-
-      router.refresh();
-      setPreviewAssetId(null);
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleUpdateReference = async (assetId: string) => {
-    if (!detail?.session.id) return;
-
-    if (activePhaseId !== 'reference') {
-      const current = piece.activeReferenceIds || [];
-      const next = current.includes(assetId)
-        ? current.filter(id => id !== assetId)
-        : [...current, assetId].slice(0, 14);
-      
-      pushPiece({ ...piece, activeReferenceIds: next });
-      return;
-    }
-
-    setBusy('SWITCHING REFERENCE');
-    try {
-      const resp = await fetch(`/api/sessions/${detail.session.id}/update-reference`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assetId }),
-      });
-      if (!resp.ok) throw new Error('Failed to update reference');
-      
-      const newRef = detail.projectReferences.find(r => r.id === assetId);
-      if (newRef) {
-        pushPiece({ ...piece, baseImage: newRef.blob_url });
-      }
-
-      router.refresh();
-      setMessage({ text: 'Base reference updated', type: 'info' });
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleReferencePromptParamChange = (
-    assetId: string,
-    field: 'title' | 'promptLine',
-    value: string,
-  ) => {
-    updatePresent((current) => ({
-      referencePromptParams: {
-        ...(current.referencePromptParams ?? {}),
-        [assetId]: {
-          ...(current.referencePromptParams?.[assetId] ?? {}),
-          [field]: value,
-        },
-      },
-    }));
-  };
-
-  const handlePromoteToReference = async (assetId: string) => {
-    if (!detail?.project.id) return;
-    setBusy('SAVING TO REFERENCE BOARD');
-    try {
-      const resp = await fetch('/api/assets/promote-to-reference', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assetId, projectId: detail.project.id }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Failed to save to reference board');
-      setMessage({ text: 'Saved to Reference Board', type: 'info' });
-      router.refresh();
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleGetCritique = async () => {
-    if (!detail?.session.id || !displayAsset?.id || busy) return;
-    setBusy('PERFORMING DRIFT DETECTION');
-    try {
-      const resp = await fetch(`/api/sessions/${detail.session.id}/qa`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateAssetId: displayAsset.id }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'QA failed');
-      setQaReport(data.report);
-      setStatus('Drift detection complete.');
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleSaveToDevice = async (format: string) => {
-    if (!displayAsset?.blob_url) return;
-    setBusy(`EXPORTING ${format.toUpperCase()}`);
-    try {
-      const response = await fetch(displayAsset.blob_url);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `artlock-design-${Date.now()}.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      setMessage({ text: `Design saved as ${format.toUpperCase()}`, type: 'info' });
-    } catch (err: any) {
-      setMessage({ text: `Export failed: ${err.message}`, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const runLabel = useMemo(() => {
-    switch (operation) {
-      case 'Extract': return 'Extract Locks';
-      case 'Surgical': return 'Surgical Edit';
-      case 'Creative': return 'Creative Pivot';
-      case 'Mockup': return 'Skin Mockup';
-      case 'Variant': return 'Flash Sheet';
-      case 'Stencil': return 'Stencil Export';
-      case 'Turnaround': return 'Model Sheet';
-      default: return 'Execute';
-    }
-  }, [operation]);
-
-  const isReferenceAssistPhase = activePhaseId === 'surgical' || activePhaseId === 'creative';
-  const referencePromptLines = useMemo(() => {
-    const params = piece.referencePromptParams ?? {};
-    return (piece.activeReferenceIds ?? [])
-      .map((assetId, index) => {
-        const param = params[assetId];
-        const title = param?.title?.trim() || `Ref${index + 1}`;
-        const promptLine = param?.promptLine?.trim();
-        return promptLine ? `${title}: ${promptLine}` : null;
-      })
-      .filter(Boolean) as string[];
-  }, [piece.activeReferenceIds, piece.referencePromptParams]);
-
-  const buildEditRequest = useCallback((baseRequest: string) => {
-    const trimmed = baseRequest.trim();
-    if (referencePromptLines.length === 0) return trimmed;
-
-    return [
-      trimmed,
-      [
-        'Reference parameters:',
-        ...referencePromptLines.map((line) => `- ${line}`),
-      ].join('\n'),
-    ].filter(Boolean).join('\n\n');
-  }, [referencePromptLines]);
 
   const latestEditRun = detail?.editRuns?.[0];
   const isCompletedEditRun = latestEditRun?.status === 'succeeded' || latestEditRun?.status === 'complete';
@@ -1261,9 +187,9 @@ export function StudioClient({ detail }: StudioClientProps) {
 
   const displayAsset = useMemo(() => {
     if (previewAssetId) {
-      const ref = detail?.projectReferences?.find((a) => a.id === previewAssetId);
+      const ref = detail?.projectReferences?.find(a => a.id === previewAssetId);
       if (ref) return ref;
-      const layer = detail?.editRuns?.find((r) => r.outputAsset?.id === previewAssetId)?.outputAsset;
+      const layer = detail?.editRuns?.find(r => r.outputAsset?.id === previewAssetId)?.outputAsset;
       if (layer) return layer;
     }
     return latestOutput ?? detail?.currentBaseAsset ?? detail?.referenceAsset;
@@ -1272,62 +198,166 @@ export function StudioClient({ detail }: StudioClientProps) {
   const activeLocksList = useMemo(() => {
     const locks = detail?.activeLock;
     return [
-      { name: "Design", value: locks?.design_id_lock !== '[X]' ? locks?.design_id_lock : null },
-      { name: "Style", value: locks?.style_id_lock !== '[X]' ? locks?.style_id_lock : null },
-      { name: "Context", value: locks?.context_id_lock !== '[X]' ? locks?.context_id_lock : null },
-      { name: "Camera", value: locks?.camera_id_lock !== '[X]' ? locks?.camera_id_lock : null },
-      { name: "Composition", value: locks?.composition_id_lock !== '[X]' ? locks?.composition_id_lock : null },
-      { name: "Tattoo", value: locks?.tattoo_id_lock !== '[X]' ? locks?.tattoo_id_lock : null },
-      { name: "Placement", value: locks?.placement_id_lock !== '[X]' ? locks?.placement_id_lock : null },
+      { name: 'Design',      value: locks?.design_id_lock !== '[X]' ? locks?.design_id_lock : null },
+      { name: 'Style',       value: locks?.style_id_lock !== '[X]' ? locks?.style_id_lock : null },
+      { name: 'Context',     value: locks?.context_id_lock !== '[X]' ? locks?.context_id_lock : null },
+      { name: 'Camera',      value: locks?.camera_id_lock !== '[X]' ? locks?.camera_id_lock : null },
+      { name: 'Composition', value: locks?.composition_id_lock !== '[X]' ? locks?.composition_id_lock : null },
+      { name: 'Tattoo',      value: locks?.tattoo_id_lock !== '[X]' ? locks?.tattoo_id_lock : null },
+      { name: 'Placement',   value: locks?.placement_id_lock !== '[X]' ? locks?.placement_id_lock : null },
     ];
   }, [detail?.activeLock]);
 
-  const handleRelock = async () => {
-    if (!detail?.latestApprovedAsset || !detail?.session.id) return;
-    setBusy('RELOCKING APPROVED BASE');
-    try {
-      const resp = await fetch(`/api/sessions/${detail.session.id}/relock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceAssetId: detail.latestApprovedAsset.id }),
-      });
-      if (!resp.ok) throw new Error('Failed to relock');
-      setActiveDrawer('locks');
-      setMessage({ text: 'Approved base relocked', type: 'info' });
-      router.refresh();
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  };
+  const referencePromptLines = useMemo(() => {
+    const params = piece.referencePromptParams ?? {};
+    return (piece.activeReferenceIds ?? [])
+      .map((id, i) => {
+        const param = params[id];
+        const title = param?.title?.trim() || `Ref${i + 1}`;
+        const promptLine = param?.promptLine?.trim();
+        return promptLine ? `${title}: ${promptLine}` : null;
+      })
+      .filter(Boolean) as string[];
+  }, [piece.activeReferenceIds, piece.referencePromptParams]);
 
-  const handleDeleteAsset = async (assetId: string) => {
-    if (!confirm('Are you sure you want to delete this asset?')) return;
-    setBusy('DELETING ASSET');
-    try {
-      const resp = await fetch(`/api/assets/${assetId}`, { method: 'DELETE' });
-      if (!resp.ok) throw new Error('Failed to delete asset');
-      router.refresh();
-      setMessage({ text: 'Asset deleted', type: 'info' });
-    } catch (err: any) {
-      setMessage({ text: err.message, type: 'error' });
-    } finally {
-      setBusy(null);
+  const runLabel = useMemo(() => {
+    switch (operation) {
+      case 'Extract':    return 'Extract Locks';
+      case 'Surgical':   return 'Surgical Edit';
+      case 'Creative':   return 'Creative Pivot';
+      case 'Mockup':     return 'Skin Mockup';
+      case 'Variant':    return 'Flash Sheet';
+      case 'Stencil':    return 'Stencil Export';
+      case 'Turnaround': return 'Model Sheet';
+      default: return 'Execute';
     }
-  };
+  }, [operation]);
 
-  // --- RENDER HELPERS ---
+  const operationLabel = useMemo(() => {
+    switch (operation) {
+      case 'Extract':  return 'Extract Locks';
+      case 'Surgical': return 'Surgical Edit';
+      case 'Creative': return 'Creative Delta';
+      case 'Variant':  return 'Variant Sheet';
+      case 'Stencil':  return 'Stencil Export';
+      case 'Mockup':   return 'Placement Fit';
+      default: return 'Studio';
+    }
+  }, [operation]);
+
+  const isReferenceAssistPhase = activePhaseId === 'surgical' || activePhaseId === 'creative';
+
+  // ── Autosave sync ───────────────────────────────────────────────────────────
+  const syncClientState = useMemo(() => ({
+    piece: { ...piece, request, maskAssetId, maskType, regionHint },
+    operation, activeDrawer, brushSize, maskMode, request,
+    maskAssetId, regionHint, maskType, showMask,
+    dockPosition, dockItems, previewAssetId,
+    activePhase: piece.activePhase,
+    past: pastPiece, future: futurePiece,
+  }), [piece, pastPiece, futurePiece, request, maskAssetId, maskType, regionHint, operation, activeDrawer, brushSize, maskMode, showMask, dockPosition, dockItems, previewAssetId]);
+
+  useEffect(() => {
+    if (!detail?.session.id || !storeHydrated) return;
+    const serialized = JSON.stringify(syncClientState);
+    if (lastSavedClientStateRef.current === null) { lastSavedClientStateRef.current = serialized; return; }
+    if (lastSavedClientStateRef.current === serialized) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      lastSavedClientStateRef.current = serialized;
+      fetch(`/api/sessions/${detail.session.id}/sync`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...syncClientState, updatedAt: new Date().toISOString() }),
+      }).catch(() => {});
+    }, 900);
+    return () => { if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current); };
+  }, [detail?.session.id, storeHydrated, syncClientState]);
+
+  // ── Bootstrap ───────────────────────────────────────────────────────────────
+  const { bootstrap, batchUpload } = useStudioBootstrap();
+
+  // ── Canvas ──────────────────────────────────────────────────────────────────
+  const canvasTransformStyle = useMemo<React.CSSProperties>(() => ({
+    transform: `translate(-50%, -50%) translate(${Math.round(canvasPan.x)}px, ${Math.round(canvasPan.y)}px) scale(${canvasScale}) rotate(${canvasRotation}deg)`,
+    transformOrigin: 'center center',
+    transition: busy ? 'none' : 'transform 0.1s ease-out',
+  }), [canvasPan.x, canvasPan.y, canvasScale, canvasRotation, busy]);
+
+  const resetCanvasView = useCallback(() => {
+    setCanvasScale(1); setCanvasPan({ x: 0, y: 0 }); setCanvasRotation(0);
+    setStatus('Canvas snapped to fit.');
+  }, [setStatus]);
+
+  const handleToggleFullscreen = useCallback(() => {
+    setChrome(!chrome);
+    setActiveDrawer(null);
+    try {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+        setStatus('Full-screen mode enabled.');
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    } catch { /* ignore */ }
+  }, [chrome, setChrome, setActiveDrawer, setStatus]);
+
+  const pushCheckpoint = useCallback(() => {
+    pushPiece({ ...piece, request, maskAssetId, maskType, regionHint });
+  }, [piece, request, maskAssetId, maskType, regionHint, pushPiece]);
+
+  // ── Voice ───────────────────────────────────────────────────────────────────
+
+  // Actions hook — all handlers in one place
+  const actions = useStudioActions({
+    detail, piece, operation, request, maskAssetId, regionHint, maskType,
+    showMask, activePhaseId, gates, displayAsset, referencePromptLines,
+    surgicalInfo, uploadInputRef,
+    setBusy, setStatus, setOperation, setActiveDrawer, setRequest,
+    pushPiece, updatePresent,
+    setMessage, setMaskAssetId, setRegionHint, setMaskType, setShowMask,
+    setDriftError, setQaReport, setPreviewAssetId,
+    bootstrap, batchUpload,
+    voiceStatus: 'idle', voiceToggle: () => {},
+    busy,
+    runLabel, activeLocksList,
+  });
+
+  const { status: voiceStatus, toggleListening: voiceToggle } = useStudioVoice({
+    onCommand: actions.handleVoiceCommand,
+    onTranscript: (text) => setRequest(text),
+  });
+
+  useCanvasGestures(
+    canvasGestureRef,
+    { scale: canvasScale, pan: canvasPan, rotation: canvasRotation },
+    {
+      onZoom: setCanvasScale, onPan: setCanvasPan, onRotate: setCanvasRotation,
+      onToggleFullScreen: handleToggleFullscreen,
+      onUndo: () => { if (undoPiece()) { setStatus('Undo executed.'); setMessage({ text: 'Undo', type: 'info' }); } },
+      onRedo: () => { if (redoPiece()) { setStatus('Redo executed.'); setMessage({ text: 'Redo', type: 'info' }); } },
+      onLongPress: () => setStatus('Color picker gesture received. Eyedropper UI pending.'),
+      onDoubleTap: resetCanvasView,
+      onFitToScreen: resetCanvasView,
+      onCopyPasteMenu: () => { setStatus('Copy/Paste gesture received. Actions panel pending.'); setMessage({ text: 'Copy/Paste menu gesture', type: 'info' }); },
+      onClearLayer: () => {
+        pushCheckpoint();
+        setRequest(''); setMaskAssetId(null); setRegionHint(null); setShowMask(false);
+        setStatus('Layer cleared.');
+        setMessage({ text: 'Layer Cleared (Scrub)', type: 'info' });
+        setTimeout(() => pushPiece({ ...piece, request: '', maskAssetId: null, regionHint: null }), 50);
+      },
+    },
+  );
+
+  // ── Reference workspace ─────────────────────────────────────────────────────
   const renderReferenceWorkspace = () => {
     const refs = detail?.projectReferences?.length
       ? detail.projectReferences
-      : detail?.referenceAsset
-        ? [detail.referenceAsset]
-        : [];
-    
+      : detail?.referenceAsset ? [detail.referenceAsset] : [];
+
     if (refs.length === 0) {
       return (
-        <div 
+        <div
           onClick={() => uploadInputRef.current?.click()}
           className="h-full w-full flex flex-col items-center justify-center cursor-pointer group transition-colors hover:bg-white/[0.02]"
         >
@@ -1349,24 +379,19 @@ export function StudioClient({ detail }: StudioClientProps) {
             const isWide = (i % 7 === 1 || i % 7 === 5);
             const isTall = (i % 7 === 3);
             const isLarge = (i % 7 === 0);
-            
             return (
               <div
                 key={asset.id}
                 onClick={() => pushPiece({ baseImage: url })}
                 onDoubleClick={async () => {
-                  await handleUpdateReference(asset.id);
-                  pushPiece({
-                    ...useStudioStore.getState().present,
-                    baseImage: url,
-                    activePhase: 'extract',
-                  });
+                  await actions.handleUpdateReference(asset.id);
+                  pushPiece({ ...useStudioStore.getState().present, baseImage: url, activePhase: 'extract' });
                   setOperation('Extract');
                   setStatus('Base selected. Entering Locks Extraction.');
                 }}
                 className={`relative group cursor-pointer rounded-2xl overflow-hidden border-2 transition-all duration-500 hover:scale-[1.02] hover:z-10 ${
-                  piece.baseImage === url 
-                    ? 'border-tls-amber ring-4 ring-tls-amber/20 z-10' 
+                  piece.baseImage === url
+                    ? 'border-tls-amber ring-4 ring-tls-amber/20 z-10'
                     : 'border-white/5 grayscale-[0.8] hover:grayscale-0 hover:border-white/20'
                 } ${isLarge ? 'col-span-2 row-span-2' : isWide ? 'col-span-2' : isTall ? 'row-span-2' : ''}`}
               >
@@ -1380,11 +405,8 @@ export function StudioClient({ detail }: StudioClientProps) {
                     {piece.baseImage === url && <div className="w-2 h-2 rounded-full bg-tls-amber shadow-[0_0_8px_#fbbf24]" />}
                   </div>
                 </div>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteAsset(asset.id);
-                  }}
+                <button
+                  onClick={(e) => { e.stopPropagation(); actions.handleDeleteAsset(asset.id); }}
                   className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/40 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
                 >
                   <X size={14} />
@@ -1392,7 +414,6 @@ export function StudioClient({ detail }: StudioClientProps) {
               </div>
             );
           })}
-          
           <button
             onClick={() => uploadInputRef.current?.click()}
             className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/5 hover:border-white/20 hover:bg-white/[0.02] transition-all group"
@@ -1405,392 +426,34 @@ export function StudioClient({ detail }: StudioClientProps) {
     );
   };
 
-  const renderTopBar = () => (
-    <header className="tls-topbar">
-      <div className="flex items-center gap-2">
-        <button onClick={() => router.push('/')} className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white" title="Go Back">
-          <ArrowLeft size={18} />
-        </button>
-        <span className="tls-topbar-title font-black text-white/92 tracking-[0.14em] uppercase">{operationLabel}</span>
-      </div>
-
-      <div className="flex items-center gap-1">
-        <div className="tls-status-dot" />
-        <button
-          className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white"
-          onClick={() => {
-            handleToggleFullscreen();
-            setChrome(false);
-            setActiveDrawer(null);
-          }}
-          title="Full Screen Canvas"
-        >
-          <Maximize size={16} />
-        </button>
-      </div>
-    </header>
-  );
-
-  const renderPhaseSidebar = () => (
-    <aside className="tls-sidebar">
-      {PHASES.map((p) => {
-        const isLocked = gates[p.id].status === 'locked';
-        const isActive = activePhaseId === p.id;
-        
-        return (
-          <button
-            key={p.id}
-            disabled={isLocked}
-            onClick={() => {
-              if (!isLocked) {
-                setActivePhaseId(p.id);
-                setOperation(p.op as Operation);
-              }
-            }}
-            className={`tls-sidebar-tab ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
-          >
-            {isLocked ? <Lock size={14} /> : p.icon}
-            <div className="tls-sidebar-label">{p.label}</div>
-          </button>
-        );
-      })}
-    </aside>
-  );
-
-  const renderLocksDrawer = () => {
-    const locked = activeLocksList.every(l => l.value !== null);
-    return (
-      <aside className="tls-drawer">
-        <div className="tls-drawer-header">
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h2 className="text-[10px] tracking-[0.2em] text-neutral-400 font-bold uppercase">Locks</h2>
-              <h1 className="text-xl font-semibold mt-1">Extraction</h1>
-            </div>
-            <span className="text-[10px] py-1 px-2 bg-green-900/30 text-green-400 border border-green-500/50 rounded-full font-mono">{activePhaseId.toUpperCase()}</span>
-          </div>
-
-          <p className="text-[11px] text-neutral-400 leading-relaxed mb-8">
-            {operation === 'Extract' 
-              ? 'Reading visual DNA from the reference. These locks guide all future generations.'
-              : 'Current design constraints enforced on the next generation run.'}
-          </p>
-
-          <div className="flex justify-between items-center mb-4">
-            <span className="text-[10px] tracking-widest text-neutral-500 font-bold uppercase">Locks Extracted</span>
-            <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold tracking-wider ${locked ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-yellow-600/20 text-yellow-500 border border-yellow-600/50'}`}>
-              {locked ? "LOCKED" : "DRAFT"}
-            </span>
-          </div>
-        </div>
-
-        <div className="tls-drawer-body scrollbar-hide space-y-2">
-          {activeLocksList.map((lock) => (
-            <div 
-              key={lock.name} 
-              className={`tls-card-row cursor-pointer transition-all ${showLockDetails === lock.name ? 'ring-1 ring-tls-amber bg-white/[0.04]' : 'hover:bg-white/[0.02]'}`}
-              onClick={() => setShowLockDetails(prev => prev === lock.name ? null : lock.name)}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <div className="tls-card-row-title">{lock.name}</div>
-                  <div className={`tls-row-dot ${lock.value ? 'filled' : ''}`} />
-                </div>
-                <div className={`text-[11px] mt-1 transition-all ${showLockDetails === lock.name ? 'text-white/90 whitespace-normal' : 'text-white/40 truncate'}`}>
-                  {lock.value || 'Empty / Undefined'}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <button
-          disabled={!!busy}
-          onClick={handleRun}
-          className="w-full mt-6 py-3 rounded-xl bg-white text-black font-black uppercase tracking-[0.15em] text-[10px] hover:bg-tls-amber transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          {busy ? 'Processing...' : runLabel}
-        </button>
-      </aside>
-    );
-  };
-
-  const renderLayersDrawer = () => (
-    <aside className="tls-drawer">
-      <div className="tls-drawer-header">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-[10px] tracking-[0.2em] text-neutral-400 font-bold uppercase">Workflow History</h2>
-            <h1 className="text-xl font-semibold mt-1">Design Deltas</h1>
-          </div>
-          <span className="text-[10px] py-1 px-2 bg-sky-900/30 text-sky-400 border border-sky-500/50 rounded-full font-mono">
-            RUN-{detail?.editRuns.length || 0}
-          </span>
-        </div>
-
-        <p className="text-[11px] text-neutral-400 leading-relaxed mb-8">
-          Iterative outputs and generation states. Promote any delta to Reference to continue the loop.
-        </p>
-
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-[10px] tracking-widest text-neutral-500 font-bold uppercase">Delta History</span>
-          <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/10 text-white border border-white/10 font-bold tracking-wider">
-            {detail?.editRuns.length || 0} ITEMS
-          </span>
-        </div>
-      </div>
-
-      <div className="tls-drawer-body scrollbar-hide space-y-2">
-        {detail?.referenceAsset && (
-          <div 
-            onClick={() => setPreviewAssetId(detail.referenceAsset!.id)} 
-            className={`flex justify-between items-center p-3 bg-white/5 border rounded-xl transition-all cursor-pointer ${previewAssetId === detail.referenceAsset.id ? 'border-tls-amber bg-tls-amber-soft' : 'border-white/5 hover:border-white/20'}`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-black overflow-hidden relative border border-white/10 shrink-0">
-                <img src={detail.referenceAsset.blob_url} className="w-full h-full object-cover" alt="ref" />
-              </div>
-              <div>
-                <div className="text-[10px] font-bold tracking-wider text-white uppercase opacity-60">Base Reference</div>
-                <div className="text-[10px] text-neutral-500 uppercase tracking-tighter">Initial Lock Source</div>
-              </div>
-            </div>
-            <div className={`w-2 h-2 rounded-full ${previewAssetId === detail.referenceAsset.id ? 'bg-tls-amber shadow-[0_0_8px_#fbbf24]' : 'bg-white/10'}`} />
-          </div>
-        )}
-
-        {detail?.editRuns?.map(run => (
-          <div 
-            key={run.id} 
-            onClick={() => setPreviewAssetId(run.outputAsset?.id || null)} 
-            className={`flex justify-between items-center p-3 bg-white/5 border rounded-xl transition-all cursor-pointer ${previewAssetId === run.outputAsset?.id ? 'border-tls-amber bg-tls-amber-soft' : 'border-white/5 hover:border-white/20'}`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-black overflow-hidden relative border border-white/10 shrink-0">
-                {run.outputAsset?.blob_url && <img src={run.outputAsset.blob_url} className="w-full h-full object-cover" alt="run" />}
-              </div>
-              <div>
-                <div className="text-[10px] font-bold tracking-wider text-white uppercase">{run.phase}</div>
-                <div className="text-[10px] text-neutral-500">{new Date(run.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={(e) => { e.stopPropagation(); handlePromoteToReference(run.outputAsset!.id); }} 
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:bg-white hover:text-black transition-all"
-                title="Promote to Reference"
-              >
-                <Sparkles size={14} />
-              </button>
-              <div className={`w-2 h-2 rounded-full ${previewAssetId === run.outputAsset?.id ? 'bg-tls-amber shadow-[0_0_8px_#fbbf24]' : 'bg-white/10'}`} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </aside>
-  );
-
-  const renderRefsDrawer = () => (
-    <aside className="tls-drawer">
-      <div className="tls-drawer-header">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-[10px] tracking-[0.2em] text-neutral-400 font-bold uppercase">Inspiration</h2>
-            <h1 className="text-xl font-semibold mt-1">Gallery</h1>
-          </div>
-          <button 
-            onClick={handleAddReference}
-            className="text-[10px] py-1 px-3 bg-white text-black rounded-full font-bold uppercase tracking-wider hover:bg-neutral-200 transition-all cursor-pointer"
-          >
-            Import
-          </button>
-        </div>
-
-        <p className="text-[11px] text-neutral-400 leading-relaxed mb-8">
-          Source material and stylistic anchors. The active reference dictates the AI extraction phase.
-        </p>
-
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-[10px] tracking-widest text-neutral-500 font-bold uppercase">Saved Assets</span>
-          <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/10 text-white border border-white/10 font-bold tracking-wider">
-            {detail?.projectReferences.length || 0} REFS
-          </span>
-        </div>
-      </div>
-
-      <div className="tls-drawer-body scrollbar-hide">
-        <div className="grid grid-cols-2 gap-2 p-2">
-          {detail?.projectReferences?.map((ref) => {
-            const activeRefs = piece.activeReferenceIds || [];
-            const refIndex = activeRefs.indexOf(ref.id);
-            const isBase = detail.referenceAsset?.id === ref.id;
-            const isSelected = activePhaseId === 'reference' ? isBase : refIndex !== -1;
-
-            return (
-              <button 
-                key={ref.id} 
-                onClick={() => handleUpdateReference(ref.id)} 
-                className={`group relative aspect-square overflow-hidden rounded-xl border transition-all ${isSelected ? "border-tls-amber shadow-[0_0_15px_rgba(251,191,36,0.3)]" : "border-white/[0.08] bg-white/[0.055] hover:border-white/30"}`}
-              >
-                {ref.blob_url && <img src={ref.blob_url} className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${isSelected ? 'opacity-100' : 'opacity-60 group-hover:opacity-80 group-hover:scale-105'}`} />}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                  <div className="text-white text-[8px] font-black tracking-widest uppercase">
-                    {activePhaseId === 'reference' ? 'Select Base' : (refIndex !== -1 ? `Ref ${refIndex + 1}` : 'Link Edit')}
-                  </div>
-                </div>
-                
-                {activePhaseId === 'reference' && isBase && (
-                  <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-tls-amber shadow-[0_0_8px_#fbbf24]" />
-                )}
-
-                {activePhaseId !== 'reference' && refIndex !== -1 && (
-                  <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-tls-amber text-black text-[9px] font-black shadow-lg">
-                    REF {refIndex + 1}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </aside>
-  );
-
-  const renderReferenceAssistHandle = () => {
-    if (!isReferenceAssistPhase) return null;
-
-    const selectedRefs = piece.activeReferenceIds || [];
-    const isOpen = activeDrawer === 'assistRefs';
-
-    return (
-      <button
-        type="button"
-        onClick={() => setActiveDrawer(isOpen ? null : 'assistRefs')}
-        className={`absolute left-5 top-5 z-30 flex h-9 min-w-9 items-center gap-2 rounded-full border px-3 text-[10px] font-black uppercase tracking-[0.16em] shadow-2xl backdrop-blur-2xl transition-all ${
-          isOpen || selectedRefs.length > 0
-            ? 'border-tls-amber bg-tls-amber text-black'
-            : 'border-white/10 bg-white/12 text-white/75 hover:bg-white hover:text-black'
-        }`}
-        title="Reference images for this edit"
-      >
-        <LayoutGrid size={13} />
-        <span>{selectedRefs.length ? `${selectedRefs.length} Refs` : 'Refs'}</span>
-      </button>
-    );
-  };
-
-  const renderReferenceAssistDrawer = () => {
-    if (!isReferenceAssistPhase || activeDrawer !== 'assistRefs') return null;
-
-    const refs = detail?.projectReferences?.length
-      ? detail.projectReferences
-      : detail?.referenceAsset
-        ? [detail.referenceAsset]
-        : [];
-    const activeRefs = piece.activeReferenceIds || [];
-
-    return (
-      <aside className="absolute left-5 top-16 z-30 w-[min(280px,calc(100%-40px))] overflow-hidden rounded-2xl border border-white/10 bg-black/76 shadow-2xl backdrop-blur-2xl">
-        <div className="flex items-start justify-between border-b border-white/10 p-4">
-          <div>
-            <div className="text-[9px] font-black uppercase tracking-[0.22em] text-tls-amber">Reference Assist</div>
-            <div className="mt-1 text-sm font-semibold text-white">Edit References</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setActiveDrawer(null)}
-            className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-white/45 transition-colors hover:bg-white/10 hover:text-white"
-            title="Close references"
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        <div className="max-h-[min(52dvh,420px)] overflow-y-auto p-3 scrollbar-hide">
-          {refs.length === 0 ? (
-            <button
-              type="button"
-              onClick={handleAddReference}
-              className="flex h-28 w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/10 text-white/35 transition-colors hover:border-tls-amber/50 hover:text-tls-amber"
-            >
-              <ImagePlus size={20} />
-              <span className="mt-2 text-[9px] font-black uppercase tracking-[0.18em]">Import Reference</span>
-            </button>
-          ) : (
-            <div className="space-y-2">
-              {refs.map((ref) => {
-                const refIndex = activeRefs.indexOf(ref.id);
-                const isSelected = refIndex !== -1;
-                const promptParam = piece.referencePromptParams?.[ref.id];
-                const title = promptParam?.title ?? (isSelected ? `Ref${refIndex + 1}` : '');
-
-                return (
-                  <div
-                    key={ref.id}
-                    className={`overflow-hidden rounded-xl border transition-all ${
-                      isSelected
-                        ? 'border-tls-amber shadow-[0_0_18px_rgba(251,191,36,0.28)]'
-                        : 'border-white/10 bg-white/[0.05] hover:border-white/35'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateReference(ref.id)}
-                      className="group relative block aspect-[5/3] w-full overflow-hidden text-left"
-                      title={isSelected ? 'Remove edit reference' : 'Use as edit reference'}
-                    >
-                      {ref.blob_url && (
-                        <img
-                          src={ref.blob_url}
-                          className={`absolute inset-0 h-full w-full object-cover transition-all ${isSelected ? 'opacity-100' : 'opacity-62 group-hover:opacity-90 group-hover:scale-105'}`}
-                          alt="Edit reference"
-                        />
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2">
-                        <span className="text-[8px] font-black uppercase tracking-[0.14em] text-white">
-                          {isSelected ? `${title || `Ref${refIndex + 1}`} selected` : 'Use as Ref'}
-                        </span>
-                      </div>
-                      {isSelected && (
-                        <div className="absolute right-2 top-2 rounded bg-tls-amber px-1.5 py-0.5 text-[9px] font-black text-black">
-                          {title || `Ref${refIndex + 1}`}
-                        </div>
-                      )}
-                    </button>
-
-                    {isSelected && (
-                      <div className="space-y-2 border-t border-white/10 bg-black/35 p-2">
-                        <input
-                          value={title}
-                          onChange={(event) => handleReferencePromptParamChange(ref.id, 'title', event.target.value)}
-                          placeholder={`Ref${refIndex + 1}`}
-                          className="h-8 w-full rounded-lg border border-white/10 bg-white/[0.05] px-2 text-[10px] font-black uppercase tracking-[0.14em] text-white outline-none focus:border-tls-amber"
-                        />
-                        <input
-                          value={promptParam?.promptLine ?? ''}
-                          onChange={(event) => handleReferencePromptParamChange(ref.id, 'promptLine', event.target.value)}
-                          placeholder="Prompt line for this reference..."
-                          className="h-8 w-full rounded-lg border border-white/10 bg-white/[0.05] px-2 text-[11px] text-white outline-none placeholder:text-white/25 focus:border-tls-amber"
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </aside>
-    );
-  };
-
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className={`tls-shell ${chrome ? 'tls-shell--chrome' : 'tls-shell--clean'} ${activeDrawer ? 'tls-shell--drawer-open' : ''}`}>
-      {chrome && renderTopBar()}
-      <input type="file" ref={uploadInputRef} style={{ display: 'none' }} accept="image/*" multiple onChange={onFileChange} />
+      {chrome && (
+        <header className="tls-topbar">
+          <div className="flex items-center gap-2">
+            <button onClick={() => router.push('/')} className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white" title="Go Back">
+              <ArrowLeft size={18} />
+            </button>
+            <span className="tls-topbar-title font-black text-white/92 tracking-[0.14em] uppercase">{operationLabel}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="tls-status-dot" />
+            <button
+              className="tls-topbar-icon !bg-transparent !border-0 text-white/40 hover:text-white"
+              onClick={() => { handleToggleFullscreen(); setChrome(false); setActiveDrawer(null); }}
+              title="Full Screen Canvas"
+            >
+              <Maximize size={16} />
+            </button>
+          </div>
+        </header>
+      )}
 
-      <main 
-        ref={canvasGestureRef as any} 
+      <input type="file" ref={uploadInputRef} style={{ display: 'none' }} accept="image/*" multiple onChange={actions.onFileChange} />
+
+      <main
+        ref={canvasGestureRef as React.RefObject<HTMLElement>}
         className="tls-artboard-frame"
         style={activePhaseId === 'reference' ? {} : canvasTransformStyle}
       >
@@ -1806,16 +469,20 @@ export function StudioClient({ detail }: StudioClientProps) {
             renderReferenceWorkspace()
           ) : (
             <div className="relative h-full w-full">
-              {renderReferenceAssistHandle()}
-              {renderReferenceAssistDrawer()}
+              <ReferenceAssistHandle piece={piece} isReferenceAssistPhase={isReferenceAssistPhase} activeDrawer={activeDrawer} setActiveDrawer={setActiveDrawer} />
+              <ReferenceAssistDrawer
+                detail={detail} piece={piece} isReferenceAssistPhase={isReferenceAssistPhase}
+                activeDrawer={activeDrawer} setActiveDrawer={setActiveDrawer}
+                onSelect={actions.handleUpdateReference}
+                onAddReference={actions.handleAddReference}
+                onParamChange={actions.handleReferencePromptParamChange}
+              />
+
               {regionHint && (
                 <div className="tls-artboard-badge z-20 flex items-center gap-2">
                   <div className="flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded bg-tls-amber text-black text-[8px] font-black animate-tls-slide-in">
                     <span>FOCUS: {regionHint.toUpperCase()}</span>
-                    <button
-                      onClick={() => { setRegionHint(null); setStatus('Target area cleared.'); }}
-                      className="hover:scale-110 transition-transform cursor-pointer"
-                    >
+                    <button onClick={() => { setRegionHint(null); setStatus('Target area cleared.'); }} className="hover:scale-110 transition-transform cursor-pointer">
                       <X size={10} />
                     </button>
                   </div>
@@ -1824,11 +491,7 @@ export function StudioClient({ detail }: StudioClientProps) {
 
               <div className="absolute inset-0 flex items-center justify-center">
                 {displayAsset?.blob_url ? (
-                  <img 
-                    src={displayAsset.blob_url} 
-                    className={`w-full h-full object-contain ${operation === 'Mockup' ? '' : 'opacity-90 transition-opacity'}`} 
-                    alt="Design" 
-                  />
+                  <img src={displayAsset.blob_url} className={`w-full h-full object-contain ${operation === 'Mockup' ? '' : 'opacity-90 transition-opacity'}`} alt="Design" />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-white/10 pointer-events-none">
                     <Upload size={32} strokeWidth={1.5} className="mb-4" />
@@ -1843,18 +506,13 @@ export function StudioClient({ detail }: StudioClientProps) {
                   height={displayAsset?.height ?? 2048}
                   isActive={showMask}
                   onExport={async (blob) => {
-                    if (!blob) {
-                      setMaskAssetId(null);
-                      return;
-                    }
+                    if (!blob) { setMaskAssetId(null); return; }
                     if (!detail?.project.id) return;
                     try {
                       const asset = await clientUploadAsset(blob, detail.project.id, 'mask');
                       setMaskAssetId(asset.artifacts.assetId);
                       setStatus('Mask updated.');
-                    } catch (err) {
-                      setStatus('Mask upload failed.');
-                    }
+                    } catch { setStatus('Mask upload failed.'); }
                   }}
                 />
               )}
@@ -1868,7 +526,6 @@ export function StudioClient({ detail }: StudioClientProps) {
                 />
               )}
 
-              {/* SURGICAL TARGET/WARNING OVERLAY */}
               {operation === 'Surgical' && (surgicalInfo?.displayRegion || activeSurgicalWarning) && (
                 <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none">
                   {surgicalInfo?.displayRegion && !activeSurgicalWarning && (
@@ -1889,29 +546,34 @@ export function StudioClient({ detail }: StudioClientProps) {
       </main>
 
       <StudioCommandDock
-        activeDrawer={activeDrawer}
-        setActiveDrawer={setActiveDrawer}
-        activePhase={activePhaseId}
-        runPhaseAction={handleRun}
-        chrome={chrome}
-        setChrome={setChrome}
+        activeDrawer={activeDrawer} setActiveDrawer={setActiveDrawer}
+        activePhase={activePhaseId} runPhaseAction={actions.handleRun}
+        chrome={chrome} setChrome={setChrome}
         setShowQuickMenu={setShowQuickMenu}
-        dockPosition={dockPosition}
-        setDockPosition={setDockPosition}
-        dockItems={dockItems}
-        setDockItems={setDockItems}
-        onRunAudit={handleGetCritique}
+        dockPosition={dockPosition} setDockPosition={setDockPosition}
+        dockItems={dockItems} setDockItems={setDockItems}
+        onRunAudit={actions.handleGetCritique}
         onOpenExport={() => setShowExportMenu(true)}
-        onRelock={handleRelock}
+        onRelock={actions.handleRelock}
         onToggleMask={() => setShowMask(!showMask)}
       />
 
       {chrome && (
         <>
-          {renderPhaseSidebar()}
-          {activeDrawer === 'locks' && renderLocksDrawer()}
-          {activeDrawer === 'layers' && renderLayersDrawer()}
-          {activeDrawer === 'refs' && renderRefsDrawer()}
+          <PhaseSidebar
+            activePhaseId={activePhaseId}
+            gates={gates}
+            onSelect={(phase, op) => { setActivePhaseId(phase); setOperation(op as Operation); }}
+          />
+          {activeDrawer === 'locks' && (
+            <LocksDrawer activeLocksList={activeLocksList} activePhaseId={activePhaseId} operation={operation} busy={busy} runLabel={runLabel} onRun={actions.handleRun} />
+          )}
+          {activeDrawer === 'layers' && (
+            <LayersDrawer detail={detail} previewAssetId={previewAssetId} setPreviewAssetId={setPreviewAssetId} onPromote={actions.handlePromoteToReference} />
+          )}
+          {activeDrawer === 'refs' && (
+            <RefsDrawer detail={detail} piece={piece} activePhaseId={activePhaseId} onSelect={actions.handleUpdateReference} onAddReference={actions.handleAddReference} />
+          )}
 
           <section className="tls-command">
             <div className="flex-1 flex flex-col gap-1.5">
@@ -1921,23 +583,19 @@ export function StudioClient({ detail }: StudioClientProps) {
                     <span className="text-tls-amber">✦</span>
                     <span>Artist Instruction</span>
                   </div>
-                  
                   {(piece.activeReferenceIds?.length || 0) > 0 && (
                     <div className="flex items-center gap-1 animate-tls-slide-in">
                       <div className="h-4 w-px bg-white/10 mx-1" />
                       {piece.activeReferenceIds?.map((id, i) => {
-                        const ref = detail?.projectReferences?.map((r: any) => r).find((r: any) => r.id === id);
+                        const ref = detail?.projectReferences?.find(r => r.id === id);
                         const refTitle = piece.referencePromptParams?.[id]?.title?.trim() || `REF ${i + 1}`;
                         return (
                           <div key={id} className="flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-md bg-tls-amber/10 border border-tls-amber/20">
                             <div className="w-3.5 h-3.5 rounded bg-black overflow-hidden border border-tls-amber/30">
-                              {ref?.blob_url && <img src={ref.blob_url} className="w-full h-full object-cover" />}
+                              {ref?.blob_url && <img src={ref.blob_url} className="w-full h-full object-cover" alt="" />}
                             </div>
                             <span className="text-[9px] font-black text-tls-amber">{refTitle}</span>
-                            <button 
-                              onClick={() => handleUpdateReference(id)}
-                              className="text-tls-amber/40 hover:text-tls-amber transition-colors bg-transparent border-0 p-0 cursor-pointer"
-                            >
+                            <button onClick={() => actions.handleUpdateReference(id)} className="text-tls-amber/40 hover:text-tls-amber transition-colors bg-transparent border-0 p-0 cursor-pointer">
                               <X size={10} />
                             </button>
                           </div>
@@ -1954,14 +612,14 @@ export function StudioClient({ detail }: StudioClientProps) {
                   onChange={(e) => setRequest(e.target.value)}
                   placeholder="Describe edit..."
                   disabled={!!busy}
-                  onKeyDown={(e) => e.key === 'Enter' && handleRun()}
+                  onKeyDown={(e) => e.key === 'Enter' && actions.handleRun()}
                   className="tls-command-input px-3"
                 />
-                <button onClick={handleMicToggle} className={`h-8 w-8 grid place-items-center rounded-lg cursor-pointer transition-colors ${voiceStatus === 'listening' ? 'bg-tls-amber/20 text-tls-amber' : 'text-white/40 hover:bg-white/10'}`}>
+                <button onClick={actions.handleMicToggle} className={`h-8 w-8 grid place-items-center rounded-lg cursor-pointer transition-colors ${voiceStatus === 'listening' ? 'bg-tls-amber/20 text-tls-amber' : 'text-white/40 hover:bg-white/10'}`}>
                   {voiceStatus === 'listening' ? <Mic size={14} /> : <MicOff size={14} />}
                 </button>
-                <button 
-                  onClick={handleEnhancePrompt} 
+                <button
+                  onClick={actions.handleEnhancePrompt}
                   disabled={!!busy || !request.trim()}
                   className="h-8 flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-3 text-[9px] font-black uppercase tracking-widest text-white/50 hover:bg-white/10 hover:text-white transition-all disabled:opacity-30"
                 >
@@ -1971,7 +629,7 @@ export function StudioClient({ detail }: StudioClientProps) {
               </div>
             </div>
             <button
-              onClick={handleRun}
+              onClick={actions.handleRun}
               disabled={!!busy || (!request.trim() && ['Surgical', 'Creative'].includes(operation))}
               className="tls-run-btn"
             >
@@ -1980,7 +638,6 @@ export function StudioClient({ detail }: StudioClientProps) {
             </button>
           </section>
 
-          {/* AI CRITIQUE BUBBLE / DRIFT DETECTOR */}
           {qaReport && (
             <div className="absolute top-[100px] left-1/2 -translate-x-1/2 w-[min(500px,80vw)] bg-tls-panel-heavy border border-tls-border backdrop-blur-tls-32 rounded-tls-20 p-[18px] z-[120] text-white text-[13px] leading-[1.5] border-l-4 border-l-tls-amber animate-tls-slide-down shadow-tls-heavy">
               <div className="flex items-center justify-between mb-2">
@@ -2010,7 +667,6 @@ export function StudioClient({ detail }: StudioClientProps) {
         </>
       )}
 
-      {/* QUICK MENU OVERLAY */}
       {showQuickMenu && (
         <div className="absolute inset-0 z-[150] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/64 backdrop-blur-sm" onClick={() => setShowQuickMenu(false)} />
@@ -2018,19 +674,19 @@ export function StudioClient({ detail }: StudioClientProps) {
             <div onClick={() => setShowQuickMenu(false)} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full border border-white/20 bg-black/80 backdrop-blur-xl flex items-center justify-center cursor-pointer hover:bg-white/10 transition-all shadow-2xl z-10">
               <X size={20} className="text-white/40" />
             </div>
-            <RadialNode label="Run Delta" icon={<Play size={14}/>} angle={-90} radius={110} primary onClick={() => { handleRun(); setShowQuickMenu(false); }} />
-            <RadialNode label="Locks" icon={<Lock size={14}/>} angle={-30} radius={110} onClick={() => { setActiveDrawer('locks'); setShowQuickMenu(false); }} />
-            <RadialNode label="Deltas" icon={<Layers size={14}/>} angle={30} radius={110} onClick={() => { setActiveDrawer('layers'); setShowQuickMenu(false); }} />
-            <RadialNode label="References" icon={<LayoutGrid size={14}/>} angle={90} radius={110} onClick={() => { setActiveDrawer('refs'); setShowQuickMenu(false); }} />
-            <RadialNode label="Export" icon={<Download size={14}/>} angle={150} radius={110} onClick={() => { setShowExportMenu(true); setShowQuickMenu(false); }} />
-            <RadialNode label="Audit" icon={<Check size={14}/>} angle={210} radius={110} onClick={() => { handleGetCritique(); setShowQuickMenu(false); }} />
+            <RadialNode label="Run Delta"   icon={<Play size={14}/>}       angle={-90}  radius={110} primary onClick={() => { actions.handleRun(); setShowQuickMenu(false); }} />
+            <RadialNode label="Locks"       icon={<Lock size={14}/>}       angle={-30}  radius={110} onClick={() => { setActiveDrawer('locks'); setShowQuickMenu(false); }} />
+            <RadialNode label="Deltas"      icon={<Layers size={14}/>}     angle={30}   radius={110} onClick={() => { setActiveDrawer('layers'); setShowQuickMenu(false); }} />
+            <RadialNode label="References"  icon={<LayoutGrid size={14}/>} angle={90}   radius={110} onClick={() => { setActiveDrawer('refs'); setShowQuickMenu(false); }} />
+            <RadialNode label="Export"      icon={<Download size={14}/>}   angle={150}  radius={110} onClick={() => { setShowExportMenu(true); setShowQuickMenu(false); }} />
+            <RadialNode label="Audit"       icon={<Check size={14}/>}      angle={210}  radius={110} onClick={() => { actions.handleGetCritique(); setShowQuickMenu(false); }} />
           </div>
         </div>
       )}
 
       {!chrome && (
-        <button 
-          onClick={() => setChrome(true)} 
+        <button
+          onClick={() => setChrome(true)}
           className="absolute top-4 right-4 z-[130] grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-black/55 text-white/70 shadow-2xl backdrop-blur-2xl transition hover:bg-white hover:text-black"
           title="Show UI"
         >
@@ -2038,7 +694,6 @@ export function StudioClient({ detail }: StudioClientProps) {
         </button>
       )}
 
-      {/* EXPORT OPTIONS MENU */}
       {showExportMenu && (
         <div className="absolute inset-0 z-[200] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/84 backdrop-blur-xl" onClick={() => setShowExportMenu(false)} />
@@ -2052,30 +707,21 @@ export function StudioClient({ detail }: StudioClientProps) {
                 <X size={20} />
               </button>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-3">
                 <div className="text-[10px] font-black uppercase tracking-widest text-white/30 px-1">Download to Device</div>
                 <div className="grid grid-cols-4 gap-2">
                   {['png', 'jpeg', 'psd', 'pdf'].map(fmt => (
-                    <button 
-                      key={fmt} 
-                      onClick={() => { handleSaveToDevice(fmt); setShowExportMenu(false); }}
-                      className="h-14 rounded-2xl bg-white/[0.04] border border-white/10 flex flex-col items-center justify-center gap-1 hover:bg-white hover:text-black transition-all group"
-                    >
+                    <button key={fmt} onClick={() => { actions.handleSaveToDevice(fmt); setShowExportMenu(false); }} className="h-14 rounded-2xl bg-white/[0.04] border border-white/10 flex flex-col items-center justify-center gap-1 hover:bg-white hover:text-black transition-all group">
                       <Download size={16} className="group-hover:scale-110 transition-transform" />
                       <span className="text-[10px] font-bold uppercase">{fmt}</span>
                     </button>
                   ))}
                 </div>
               </div>
-
               <div className="space-y-3">
                 <div className="text-[10px] font-black uppercase tracking-widest text-white/30 px-1">Studio Cloud</div>
-                <button 
-                  onClick={() => { setMessage({ text: "Saved to Cloud Storage", type: 'info' }); setShowExportMenu(false); }}
-                  className="w-full h-16 rounded-2xl bg-tls-amber/10 border border-tls-amber/20 flex items-center gap-4 px-4 hover:bg-tls-amber hover:text-black transition-all group"
-                >
+                <button onClick={() => { setMessage({ text: 'Saved to Cloud Storage', type: 'info' }); setShowExportMenu(false); }} className="w-full h-16 rounded-2xl bg-tls-amber/10 border border-tls-amber/20 flex items-center gap-4 px-4 hover:bg-tls-amber hover:text-black transition-all group">
                   <Activity size={20} />
                   <div className="text-left">
                     <div className="text-[11px] font-black uppercase tracking-widest">Persist Session</div>
@@ -2083,13 +729,9 @@ export function StudioClient({ detail }: StudioClientProps) {
                   </div>
                 </button>
               </div>
-
               <div className="space-y-3">
                 <div className="text-[10px] font-black uppercase tracking-widest text-white/30 px-1">Pipeline</div>
-                <button 
-                  onClick={() => { if (displayAsset) handlePromoteToReference(displayAsset.id); setShowExportMenu(false); }}
-                  className="w-full h-16 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center gap-4 px-4 hover:bg-white hover:text-black transition-all group"
-                >
+                <button onClick={() => { if (displayAsset) actions.handlePromoteToReference(displayAsset.id); setShowExportMenu(false); }} className="w-full h-16 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center gap-4 px-4 hover:bg-white hover:text-black transition-all group">
                   <LayoutGrid size={20} />
                   <div className="text-left">
                     <div className="text-[11px] font-black uppercase tracking-widest">To Board</div>
@@ -2098,12 +740,8 @@ export function StudioClient({ detail }: StudioClientProps) {
                 </button>
               </div>
             </div>
-
             <div className="mt-8 pt-8 border-t border-white/5">
-              <button 
-                onClick={() => { setMessage({ text: "Checkpoint Created", type: 'info' }); setShowExportMenu(false); }}
-                className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-[11px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all"
-              >
+              <button onClick={() => { setMessage({ text: 'Checkpoint Created', type: 'info' }); setShowExportMenu(false); }} className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-[11px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all">
                 Create Restore Checkpoint
               </button>
             </div>
@@ -2111,10 +749,9 @@ export function StudioClient({ detail }: StudioClientProps) {
         </div>
       )}
 
-      {/* TOASTS */}
       {message && (
         <div
-          className={`absolute top-24 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 rounded-[16px] border border-tls-amber/30 bg-black/72 backdrop-blur-[12px] text-tls-amber px-[22px] py-[14px] text-[11px] font-black uppercase tracking-[0.22em] shadow-[0_18px_50px_rgba(0,0,0,0.45)] cursor-pointer`}
+          className="absolute top-24 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 rounded-[16px] border border-tls-amber/30 bg-black/72 backdrop-blur-[12px] text-tls-amber px-[22px] py-[14px] text-[11px] font-black uppercase tracking-[0.22em] shadow-[0_18px_50px_rgba(0,0,0,0.45)] cursor-pointer"
           onClick={() => setMessage(null)}
         >
           {message.type === 'error' ? <ShieldCheck size={16} className="text-red-400" /> : <Sparkles size={16} className="animate-pulse text-tls-amber" />}
