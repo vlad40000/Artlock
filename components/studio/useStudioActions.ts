@@ -151,6 +151,14 @@ export function useStudioActions(ctx: ActionContext) {
           endpoint = `/api/sessions/${detail.session.id}/mockup`;
           body = { baseAssetId: displayAsset.id, placement: 'Forearm', tattooMode: DEFAULT_TATTOO_MODE };
           break;
+        case 'Turnaround':
+          endpoint = `/api/sessions/${detail.session.id}/turnaround`;
+          body = {
+            baseAssetId: displayAsset.id,
+            views: ['Front', 'Side', 'Back'],
+            layout: 'single',
+          };
+          break;
       }
 
       const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

@@ -524,9 +524,16 @@ export async function runTattooTurnaround(args: {
   mimeType: string;
   views: string[];
   layout: 'single' | 'separate';
+  designIdLock?: string | null;
+  styleIdLock?: string | null;
   temperature?: number;
 }) {
-  const prompt = TATTOO_PHASE_2C.buildPrompt(args);
+  const prompt = TATTOO_PHASE_2C.buildPrompt({
+    views: args.views,
+    layout: args.layout,
+    designIdLock: args.designIdLock ?? undefined,
+    styleIdLock: args.styleIdLock ?? undefined,
+  });
   const response = await generateImageContentWithRetry({
     model: env.geminiImageModel,
     contents: [
