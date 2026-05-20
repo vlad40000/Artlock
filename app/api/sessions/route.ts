@@ -5,9 +5,12 @@ import { z } from 'zod';
 import { auth } from '@/auth';
 import { sql } from '@/lib/db';
 
+interface ProjectRow { id: string; owner_id: string; }
+interface AssetRow { id: string; project_id: string; kind: string; }
+
 const bodySchema = z.object({
   projectId: z.string().uuid(),
-  referenceAssetId: z.string().uuid(),
+  referenceAssetId: z.string().uuid().optional(),
   status: z.enum(['active', 'archived']).optional(),
 });
 
@@ -21,33 +24,35 @@ export async function POST(request: Request) {
 
     const body = bodySchema.parse(await request.json());
 
-    // Verify project and asset
-    const [projects, assets] = await Promise.all([
-      sql`SELECT id, owner_id FROM projects WHERE id = ${body.projectId}`,
-      sql`SELECT id, project_id, kind FROM assets WHERE id = ${body.referenceAssetId}`
-    ]) as any;
+    // Verify project ownership
+    const projects = await sql`
+      SELECT id, owner_id FROM projects WHERE id = ${body.projectId}
+    ` as ProjectRow[];
 
     const project = projects[0];
-    const asset = assets[0];
-
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
-
     if (project.owner_id !== userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!asset) {
-      return NextResponse.json({ error: 'Reference asset not found' }, { status: 404 });
-    }
+    // Verify reference asset if provided
+    if (body.referenceAssetId) {
+      const assets = await sql`
+        SELECT id, project_id, kind FROM assets WHERE id = ${body.referenceAssetId}
+      ` as AssetRow[];
 
-    if (asset.project_id !== body.projectId) {
-      return NextResponse.json({ error: 'Reference asset must belong to the same project' }, { status: 409 });
-    }
-
-    if (asset.kind !== 'reference') {
-      return NextResponse.json({ error: 'Only reference assets can start a session' }, { status: 409 });
+      const asset = assets[0];
+      if (!asset) {
+        return NextResponse.json({ error: 'Reference asset not found' }, { status: 404 });
+      }
+      if (asset.project_id !== body.projectId) {
+        return NextResponse.json({ error: 'Reference asset must belong to the same project' }, { status: 409 });
+      }
+      if (asset.kind !== 'reference') {
+        return NextResponse.json({ error: 'Only reference assets can start a session' }, { status: 409 });
+      }
     }
 
     const sessionId = randomUUID();
@@ -55,22 +60,18 @@ export async function POST(request: Request) {
       INSERT INTO design_sessions (
         id, project_id, reference_asset_id, active_lock_id, latest_approved_asset_id, status
       ) VALUES (
-        ${sessionId}, ${body.projectId}, ${body.referenceAssetId}, null, null, ${body.status ?? 'active'}
+        ${sessionId}, ${body.projectId}, ${body.referenceAssetId ?? null}, null, null, ${body.status ?? 'active'}
       )
     `;
 
     return NextResponse.json({
       status: 'succeeded',
-      artifacts: {
-        sessionId,
-      },
+      artifacts: { sessionId },
       inputs: {
         projectId: body.projectId,
-        referenceAssetId: body.referenceAssetId,
+        referenceAssetId: body.referenceAssetId ?? null,
       },
-      params: {
-        status: body.status ?? 'active',
-      },
+      params: { status: body.status ?? 'active' },
     });
   } catch (error) {
     return apiErrorResponse(error, { route: 'create-session' });

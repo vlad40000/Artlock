@@ -50,7 +50,7 @@ export function useStudioBootstrap() {
         sessionId = sessionData.artifacts.sessionId;
 
         // 4. Route to the new studio session
-        router.push(`/studio/${sessionId}` as any);
+        router.push(`/studio/${sessionId}`);
       } else {
         // If session exists, we just refresh to see the new asset in gallery
         router.refresh();
