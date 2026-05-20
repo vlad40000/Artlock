@@ -20,6 +20,7 @@ export type PersistedStudioClientState = {
   dockItems?: string[];
   activePhase?: DesignPhase;
   previewAssetId?: string | null;
+  boardHiddenIds?: string[];
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -84,5 +85,8 @@ export function sanitizePersistedClientState(value: unknown): PersistedStudioCli
     showMask: typeof value.showMask === 'boolean' ? value.showMask : undefined,
     dockPosition, dockItems, activePhase,
     previewAssetId: optionalString(value.previewAssetId),
+    boardHiddenIds: Array.isArray(value.boardHiddenIds)
+      ? value.boardHiddenIds.filter((id): id is string => typeof id === 'string')
+      : undefined,
   };
 }

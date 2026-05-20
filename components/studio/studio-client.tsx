@@ -72,6 +72,7 @@ export function StudioClient({ detail }: StudioClientProps) {
   const [dockItems, setDockItems] = useState(() => persistedClientState.dockItems?.length ? persistedClientState.dockItems : ['menu', 'locks', 'refs', 'layers', 'undo', 'redo']);
   const [driftError, setDriftError] = useState<string | null>(null);
   const [storeHydrated, setStoreHydrated] = useState(false);
+  const [boardHiddenIds, setBoardHiddenIds] = useState<string[]>(() => persistedClientState.boardHiddenIds ?? []);
   const isMounted = useRef(false);
   const lastSavedClientStateRef = useRef<string | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -255,7 +256,8 @@ export function StudioClient({ detail }: StudioClientProps) {
     dockPosition, dockItems, previewAssetId,
     activePhase: piece.activePhase,
     past: pastPiece, future: futurePiece,
-  }), [piece, pastPiece, futurePiece, request, maskAssetId, maskType, regionHint, operation, activeDrawer, brushSize, maskMode, showMask, dockPosition, dockItems, previewAssetId]);
+    boardHiddenIds,
+  }), [piece, pastPiece, futurePiece, request, maskAssetId, maskType, regionHint, operation, activeDrawer, brushSize, maskMode, showMask, dockPosition, dockItems, previewAssetId, boardHiddenIds]);
 
   useEffect(() => {
     if (!detail?.session.id || !storeHydrated) return;
@@ -351,9 +353,10 @@ export function StudioClient({ detail }: StudioClientProps) {
 
   // ── Reference workspace ─────────────────────────────────────────────────────
   const renderReferenceWorkspace = () => {
-    const refs = detail?.projectReferences?.length
+    const refs = (detail?.projectReferences?.length
       ? detail.projectReferences
-      : detail?.referenceAsset ? [detail.referenceAsset] : [];
+      : detail?.referenceAsset ? [detail.referenceAsset] : []
+    ).filter(a => !boardHiddenIds.includes(a.id));
 
     if (refs.length === 0) {
       return (
@@ -406,8 +409,13 @@ export function StudioClient({ detail }: StudioClientProps) {
                   </div>
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); actions.handleDeleteAsset(asset.id); }}
-                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/40 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBoardHiddenIds(prev => [...prev, asset.id]);
+                    if (piece.baseImage === url) pushPiece({ baseImage: null });
+                  }}
+                  title="Remove from board (stays in gallery)"
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/40 opacity-0 group-hover:opacity-100 hover:text-white transition-all"
                 >
                   <X size={14} />
                 </button>
