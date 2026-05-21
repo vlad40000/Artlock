@@ -22,8 +22,6 @@ export async function POST(request: Request) {
 
     const commands = await parseVoiceCommand({
       transcript: body.transcript,
-      audioBase64: body.audioBase64,
-      mimeType: body.mimeType,
     });
 
     return NextResponse.json({
