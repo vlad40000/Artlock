@@ -115,6 +115,37 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
     });
   };
 
+  const [exportIncludeBack, setExportIncludeBack] = useState(false);
+  const [exportPdfBusy, setExportPdfBusy] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (!exportUrl || exportPdfBusy) return;
+    setExportPdfBusy(true);
+    try {
+      const resp = await fetch(`/api/flash/boards/${detail.board.id}/export-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          frontUrl: exportUrl,
+          backUrl: exportBackUrl ?? null,
+          sheetTitle: exportTitle,
+        }),
+      });
+      if (!resp.ok) throw new Error('PDF generation failed');
+      const blob = await resp.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'flash-sheet.pdf'; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'PDF failed');
+    } finally {
+      setExportPdfBusy(false);
+    }
+  };
+
+  const [exportBackUrl, setExportBackUrl] = useState<string | null>(null);
+
   const handleExport = async () => {
     if (exportSelected.size === 0 || exporting) return;
     setExporting(true);
@@ -123,14 +154,17 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          designIds: Array.from(exportSelected),
-          layout: exportLayout,
-          sheetTitle: exportTitle.trim() || detail.board.title,
+          designIds:   Array.from(exportSelected),
+          layout:      exportLayout,
+          sheetTitle:  exportTitle.trim() || detail.board.title,
+          includeBack: exportIncludeBack,
         }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Export failed');
-      setExportUrl(data.export.url);
+      setExportUrl(data.export.front);
+      setExportBackUrl(data.export.back ?? null);
+      setShowExportPanel(false);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Export failed');
       setShowExportPanel(false);
@@ -568,7 +602,23 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
                     </button>
                   ))}
                 </div>
-                <div className="text-[10px] text-white/25 mt-2">11×14 inch sheet @ 300 DPI</div>
+              </div>
+
+              {/* Back sheet toggle */}
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-2">Back Sheet</div>
+                <button
+                  onClick={() => setExportIncludeBack(p => !p)}
+                  className={`w-full py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-between px-4 ${
+                    exportIncludeBack
+                      ? 'border-tls-amber bg-tls-amber/10 text-tls-amber'
+                      : 'border-white/10 text-white/40 hover:border-white/30 hover:text-white'
+                  }`}
+                >
+                  <span>Include Stencil / Outline Sheet</span>
+                  <span>{exportIncludeBack ? '✓' : '○'}</span>
+                </button>
+                <div className="text-[10px] text-white/20 mt-1 px-1">High-contrast B&W version for stencil transfer · 11×14 @ 300 DPI</div>
               </div>
             </div>
 
@@ -599,29 +649,54 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
       {/* Export result */}
       {exportUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setExportUrl(null); setShowExportPanel(false); setExportMode(false); setExportSelected(new Set()); }} />
-          <div className="relative w-[min(560px,92vw)] bg-tls-panel border border-tls-border rounded-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setExportUrl(null); setExportBackUrl(null); setShowExportPanel(false); setExportMode(false); setExportSelected(new Set()); }} />
+          <div className="relative w-[min(560px,92vw)] max-h-[90vh] bg-tls-panel border border-tls-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-white/[0.06] shrink-0">
               <div>
                 <div className="text-[9px] font-black uppercase tracking-[0.22em] text-tls-emerald mb-1">Sheet Ready</div>
                 <div className="text-white font-black text-base">Flash Sheet Built</div>
               </div>
-              <button onClick={() => { setExportUrl(null); setShowExportPanel(false); setExportMode(false); setExportSelected(new Set()); }} className="text-white/30 hover:text-white transition-colors">
+              <button onClick={() => { setExportUrl(null); setExportBackUrl(null); setShowExportPanel(false); setExportMode(false); setExportSelected(new Set()); }} className="text-white/30 hover:text-white transition-colors">
                 <X size={18} />
               </button>
             </div>
-            <div className="p-6">
-              <img src={exportUrl} className="w-full rounded-xl border border-white/10 mb-6" alt="Flash Sheet Preview" />
-              <a
-                href={exportUrl}
-                download="flash-sheet.png"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-tls-amber text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
+            <div className="overflow-y-auto flex-1 p-6 space-y-4 scrollbar-hide">
+              {/* Front sheet preview */}
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 mb-2">Front Sheet</div>
+                <img src={exportUrl} className="w-full rounded-xl border border-white/10" alt="Front Sheet Preview" />
+              </div>
+              {/* Back sheet preview */}
+              {exportBackUrl && (
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 mb-2">Back Sheet — Stencil/Outline</div>
+                  <img src={exportBackUrl} className="w-full rounded-xl border border-white/10" alt="Back Sheet Preview" />
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-white/[0.06] shrink-0 space-y-2">
+              {/* PNG downloads */}
+              <div className="flex gap-2">
+                <a href={exportUrl} download="flash-sheet-front.png" target="_blank" rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-white/10 text-white/60 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors">
+                  <Download size={13} /> Front PNG
+                </a>
+                {exportBackUrl && (
+                  <a href={exportBackUrl} download="flash-sheet-back.png" target="_blank" rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-white/10 text-white/60 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors">
+                    <Download size={13} /> Back PNG
+                  </a>
+                )}
+              </div>
+              {/* PDF download */}
+              <button
+                onClick={handleExportPdf}
+                disabled={exportPdfBusy}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-tls-amber text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-40"
               >
                 <Download size={13} />
-                Download Sheet
-              </a>
+                {exportPdfBusy ? 'Building PDF...' : `Download PDF${exportBackUrl ? ' (Front + Back)' : ''}`}
+              </button>
             </div>
           </div>
         </div>

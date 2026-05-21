@@ -61,6 +61,8 @@ export function StudioClient({ detail }: StudioClientProps) {
   // ── Local UI state ──────────────────────────────────────────────────────────
   const [message, setMessage] = useState<{ text: string; type: 'info' | 'error' } | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [flashBoards, setFlashBoards] = useState<{ id: string; title: string }[]>([]);
+  const [flashBoardPickerOpen, setFlashBoardPickerOpen] = useState(false);
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [showMask, setShowMask] = useState(() => persistedClientState.showMask ?? false);
   const [maskAssetId, setMaskAssetId] = useState<string | null>(() => persistedClientState.maskAssetId ?? null);
@@ -717,14 +719,14 @@ export function StudioClient({ detail }: StudioClientProps) {
 
       {showExportMenu && (
         <div className="absolute inset-0 z-[200] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/84 backdrop-blur-xl" onClick={() => setShowExportMenu(false)} />
+          <div className="absolute inset-0 bg-black/84 backdrop-blur-xl" onClick={() => { setShowExportMenu(false); setFlashBoards([]); setFlashBoardPickerOpen(false); }} />
           <div className="relative w-[min(480px,90vw)] bg-tls-panel-heavy border border-white/10 rounded-3xl p-8 shadow-[0_32px_80px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-tls-amber mb-1">Export Engine</h3>
                 <h2 className="text-2xl font-semibold">Save Artwork</h2>
               </div>
-              <button onClick={() => setShowExportMenu(false)} className="h-10 w-10 grid place-items-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
+              <button onClick={() => { setShowExportMenu(false); setFlashBoards([]); setFlashBoardPickerOpen(false); }} className="h-10 w-10 grid place-items-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
                 <X size={20} />
               </button>
             </div>
@@ -759,6 +761,60 @@ export function StudioClient({ detail }: StudioClientProps) {
                     <div className="text-[9px] opacity-60">New Ref Source</div>
                   </div>
                 </button>
+              </div>
+
+              {/* Flash Board section */}
+              <div className="col-span-2 space-y-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/30 px-1">Flash Board</div>
+                {!flashBoardPickerOpen ? (
+                  <button
+                    onClick={async () => {
+                      setFlashBoardPickerOpen(true);
+                      const resp = await fetch('/api/flash/boards');
+                      const data = await resp.json();
+                      setFlashBoards(data.boards ?? []);
+                    }}
+                    className="w-full h-16 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center gap-4 px-4 hover:bg-white hover:text-black transition-all group"
+                  >
+                    <Layers size={20} />
+                    <div className="text-left">
+                      <div className="text-[11px] font-black uppercase tracking-widest">Save to Flash Board</div>
+                      <div className="text-[9px] opacity-60">Add to your flash collection</div>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-3 space-y-2">
+                    <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 px-1 mb-2">Select a board</div>
+                    {flashBoards.length === 0 ? (
+                      <div className="text-white/30 text-[11px] text-center py-3">No boards yet — create one at <span className="text-tls-amber">/flash</span></div>
+                    ) : (
+                      flashBoards.map((board: { id: string; title: string }) => (
+                        <button
+                          key={board.id}
+                          onClick={async () => {
+                            if (!displayAsset?.id) return;
+                            const resp = await fetch(`/api/flash/boards/${board.id}/designs`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ assetId: displayAsset.id, isAiGenerated: true }),
+                            });
+                            if (resp.ok) {
+                              setMessage({ text: `Saved to "${board.title}"`, type: 'info' });
+                            } else {
+                              setMessage({ text: 'Failed to save to Flash Board', type: 'error' });
+                            }
+                            setShowExportMenu(false);
+                            setFlashBoards([]);
+                            setFlashBoardPickerOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl bg-white/[0.04] hover:bg-tls-amber hover:text-black border border-white/10 text-white text-[11px] font-black uppercase tracking-widest transition-all"
+                        >
+                          {board.title}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-8 pt-8 border-t border-white/5">
