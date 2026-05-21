@@ -369,7 +369,15 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
 
           <button
             className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-dashed border-white/10 text-[10px] font-black uppercase tracking-widest text-white/20 hover:border-tls-amber/30 hover:text-tls-amber transition-all mt-2"
-            onClick={() => setStatus('Theme extraction coming in step 3')}
+            onClick={() => {
+              if (activeThemeId) {
+                setShowGeneratePanel(true);
+              } else {
+                setStatus('Select a design → Extract Theme first.');
+                setTimeout(() => setStatus(''), 3000);
+              }
+            }}
+            title="Generate new designs in the active theme"
           >
             <Plus size={10} />
             Theme
@@ -522,7 +530,12 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
                 </button>
                 <button
                   className="w-full py-2.5 rounded-xl border border-white/10 text-white/50 text-[10px] font-black uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors"
-                  onClick={() => setStatus('Generate variations — coming in step 2')}
+                  onClick={() => {
+                    if (selectedDesign?.flash_theme_id) {
+                      setActiveThemeId(selectedDesign.flash_theme_id);
+                    }
+                    setShowGeneratePanel(true);
+                  }}
                 >
                   Generate Variations
                 </button>

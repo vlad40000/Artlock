@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { auth } from '@/auth';
 import { sql } from '@/lib/db';
 import { apiErrorResponse } from '@/lib/server/api-error';
-import { PDFDocument, PageSizes } from 'pdf-lib';
+import { PDFDocument } from 'pdf-lib';
 
 const paramsSchema = z.object({ boardId: z.string().uuid() });
 const bodySchema = z.object({

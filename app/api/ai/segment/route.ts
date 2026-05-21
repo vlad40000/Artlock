@@ -1,3 +1,4 @@
+import { apiErrorResponse } from '@/lib/server/api-error';
 import { NextResponse } from 'next/server';
 import { env } from '@/lib/utils/env';
 import { generateContentWithRetry } from '@/lib/ai/gemini';
@@ -54,8 +55,8 @@ If no regions are found, return an empty array [].`;
     }
 
     return NextResponse.json({ boxes });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Segmentation error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiErrorResponse(error, { route: 'segment' });
   }
 }

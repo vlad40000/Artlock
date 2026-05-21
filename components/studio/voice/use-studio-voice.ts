@@ -129,9 +129,9 @@ export function useStudioVoice(options: UseStudioVoiceOptions = {}) {
       if (recognition) {
         try { recognition.start(); } catch (_) { /* already started */ }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to start voice:', err);
-      if (err.name === 'NotAllowedError') {
+      if (err instanceof Error && err.name === 'NotAllowedError') {
         updateStatus('denied');
       } else {
         updateStatus('error');

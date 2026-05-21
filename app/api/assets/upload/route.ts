@@ -111,7 +111,7 @@ export async function POST(request: Request) {
           ${dimensions?.width ?? null}, ${dimensions?.height ?? null}, NULL, ${rawKind === 'reference' ? 'intake' : 'mask'}
         )
       `;
-    } catch (dbError: any) {
+    } catch (dbError: unknown) {
       return apiErrorResponse(dbError, { route: 'asset-upload-db' });
     }
 

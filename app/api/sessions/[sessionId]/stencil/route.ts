@@ -1,3 +1,4 @@
+import { apiErrorResponse } from '@/lib/server/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { runTattooStencil } from '@/lib/ai/gemini';
 import { getOwnedSessionDetail, resolveSessionAsset } from '@/lib/server/session-detail';
@@ -47,8 +48,8 @@ export async function POST(
     });
 
     return NextResponse.json({ run });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Stencil Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiErrorResponse(error, { route: 'stencil' });
   }
 }
