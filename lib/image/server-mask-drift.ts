@@ -193,11 +193,11 @@ export async function validateServerMaskDrift(args: {
   const DRIFT_WARNING_THRESHOLD = 0.02;
 
   if (drifted) {
-    console.log(`[mask-drift] REJECTED: changed=${changedPixels}, outside=${outsideMaskPixels}, ratio=${outsideMaskFraction.toFixed(4)}`);
+    // drift rejected — handled by return value
   } else if (outsideMaskFraction > DRIFT_WARNING_THRESHOLD) {
-    console.log(`[mask-drift] CAUTION: changed=${changedPixels}, outside=${outsideMaskPixels}, ratio=${outsideMaskFraction.toFixed(4)}`);
+    // drift caution — handled by return value
   } else if (outsideMaskPixels > 0) {
-    console.log(`[mask-drift] CLEANED: changed=${changedPixels}, outside=${outsideMaskPixels}, ratio=${outsideMaskFraction.toFixed(4)}`);
+    // drift cleaned — handled by return value
   }
 
   return {

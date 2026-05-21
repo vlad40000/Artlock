@@ -1,3 +1,4 @@
+import type { LockRow, VersionRow } from './db-types';
 import { randomUUID } from 'node:crypto';
 import { extractTattooLocks } from '@/lib/ai/gemini';
 import { TATTOO_PHASE_1A } from '@/lib/ai/prompt-contracts/tattoo-phase-1a';
@@ -14,8 +15,8 @@ export async function createLockFromAsset(args: {
 }) {
   const lockId = randomUUID();
   let parsed;
-  let modelName = env.geminiPhase1AModel;
-  let contractVersion = TATTOO_PHASE_1A.version;
+  let modelName: string = env.geminiPhase1AModel;
+  let contractVersion: string = TATTOO_PHASE_1A.version;
 
   const existingRows = await sql`
     SELECT
@@ -26,7 +27,7 @@ export async function createLockFromAsset(args: {
     WHERE source_asset_id = ${args.sourceAsset.id}
     ORDER BY created_at DESC
     LIMIT 1
-  ` as any[];
+  ` as LockRow[];
 
   if (existingRows.length > 0) {
     const existing = existingRows[0];
@@ -83,7 +84,7 @@ export async function createLockFromAsset(args: {
     SELECT inserted.id, inserted.version
     FROM inserted
     JOIN session_updated ON session_updated.active_lock_id = inserted.id
-  ` as any[];
+  ` as VersionRow[];
 
   const inserted = rows[0];
   if (!inserted) {

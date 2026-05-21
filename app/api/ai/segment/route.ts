@@ -3,6 +3,15 @@ import { NextResponse } from 'next/server';
 import { env } from '@/lib/utils/env';
 import { generateContentWithRetry } from '@/lib/ai/gemini';
 
+/**
+ * POST /api/ai/segment
+ *
+ * Gemini-based semantic segmentation — returns normalized bounding boxes for
+ * the main subject of a tattoo design.
+ *
+ * Intentionally unused in the UI until Localized Edit mode is built.
+ * See: prompt-contracts/consolidated_prompt_pack — Phase 1B Localized Edit variant.
+ */
 export async function POST(req: Request) {
   try {
     const { imageBase64, mimeType, prompt = 'segment the main subject of this tattoo design' } = await req.json();

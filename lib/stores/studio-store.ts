@@ -97,7 +97,14 @@ export const useStudioStore = create<StudioStore>((set, get) => ({
     const { present, past } = get();
     const updateObj = typeof update === 'function' ? update(present) : update;
     const nextPresent = { ...present, ...updateObj };
-    if (JSON.stringify(nextPresent) === JSON.stringify(present)) return;
+    // Cheap identity check on the most-frequently-changing fields.
+    // Avoids full deep-serialize on every push (PieceState can be large).
+    const noChange =
+      nextPresent.baseImage     === present.baseImage     &&
+      nextPresent.editLayers    === present.editLayers    &&
+      nextPresent.request       === present.request       &&
+      nextPresent.lastUpdate    === present.lastUpdate;
+    if (noChange) return;
     set({
       past: [...past.slice(-(MAX_HISTORY - 1)), present],
       present: nextPresent,

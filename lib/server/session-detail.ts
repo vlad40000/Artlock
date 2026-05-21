@@ -1,3 +1,4 @@
+import type { SessionRow, ProjectRow } from "./db-types";
 import { auth } from '@/auth';
 import { sql } from '@/lib/db';
 
@@ -120,7 +121,7 @@ export async function getOwnedSessionDetail(sessionId: string): Promise<OwnedSes
     SELECT id, project_id, reference_asset_id, active_lock_id, latest_approved_asset_id, status, created_at, client_state
     FROM design_sessions
     WHERE id = ${sessionId}
-  ` as any[];
+  ` as SessionRow[];
 
 
   const session = sessions[0];
@@ -132,7 +133,7 @@ export async function getOwnedSessionDetail(sessionId: string): Promise<OwnedSes
     SELECT id, owner_id, title, status, created_at, gallery_state
     FROM projects
     WHERE id = ${session.project_id}
-  ` as any[];
+  ` as ProjectRow[];
 
   const project = projects[0];
   if (!project) {
@@ -202,7 +203,9 @@ export async function getOwnedSessionDetail(sessionId: string): Promise<OwnedSes
     sourceAsset: ls.source_asset_id ? (assetsById.get(ls.source_asset_id) ?? null) : null,
   }));
 
-  const referenceAsset = assetsById.get(session.reference_asset_id) ?? null;
+  const referenceAsset = session.reference_asset_id
+    ? (assetsById.get(session.reference_asset_id) ?? null)
+    : null;
   const latestApprovedAsset = session.latest_approved_asset_id
     ? (assetsById.get(session.latest_approved_asset_id) ?? null)
     : null;
@@ -237,8 +240,24 @@ export async function getOwnedSessionDetail(sessionId: string): Promise<OwnedSes
     ok: true,
     userId,
     detail: {
-      session: session as any,
-      project: project as any,
+      session: {
+        id: session.id,
+        project_id: session.project_id,
+        reference_asset_id: session.reference_asset_id,
+        active_lock_id: session.active_lock_id,
+        latest_approved_asset_id: session.latest_approved_asset_id,
+        status: session.status,
+        created_at: session.created_at,
+        client_state: session.client_state ?? null,
+      },
+      project: {
+        id: project.id,
+        owner_id: project.owner_id,
+        title: project.title,
+        status: project.status,
+        created_at: project.created_at,
+        gallery_state: project.gallery_state ?? null,
+      },
       referenceAsset,
       latestApprovedAsset,
       currentBaseAsset,

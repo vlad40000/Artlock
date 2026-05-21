@@ -32,26 +32,6 @@ export interface MediaLockMetadata {
   locksActive?: boolean;
 }
 
-export interface Deliverable {
-  id: string;
-  type: string;
-  name: string;
-  format: 'png' | 'pdf' | 'zip' | 'url' | 'json';
-  url: string;
-  timestamp: string;
-  version: number;
-  size?: string;
-  metadata?: any;
-}
-
-export interface Preset {
-  id: string;
-  category: 'caption' | 'hashtags' | 'stencil' | 'variants';
-  name: string;
-  content: any;
-  isCustom?: boolean;
-}
-
 export interface ReferencePromptParam {
   title?: string;
   promptLine?: string;
@@ -104,10 +84,7 @@ export interface PieceState {
   activeReferenceIds?: string[];
   referencePromptParams?: Record<string, ReferencePromptParam>;
 
-  deliverables?: Deliverable[];
-  presets?: Preset[];
-  styleTemplate?: string;
-  designSurfaceDocument?: any; // To be refined if needed
+  // Note: deliverables, presets, styleTemplate, designSurfaceDocument removed — animation-era remnants
 }
 
 export interface LockRecord {

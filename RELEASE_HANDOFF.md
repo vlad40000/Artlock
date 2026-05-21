@@ -7,8 +7,8 @@ Studio-first workspace with shared canvas/mask input hardening and current-route
 * `/` -> Redirects to `/studio`
 * `/studio` -> Opens empty canvas-first Studio
 * `/studio/[sessionId]` -> Opens active Studio session
-* `/workspace/[sessionId]` -> Legacy/deep-link compatible route
-* `/intake` -> Fallback legacy setup wizard
+* `/studio` -> Main studio route (replaces legacy /workspace)
+* `/flash` -> Flash Board (new)
 
 ## Core Studio Flow
 1. **Add Reference**: Drag/drop or upload a tattoo reference image.
