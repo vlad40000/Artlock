@@ -22,8 +22,8 @@ export interface ReferenceAssetInput {
 export async function runTattooSurgicalEdit(args: {
   baseImageBase64: string; maskImageBase64: string | null; maskMimeType?: string | null;
   referenceImages?: ReferenceAssetInput[]; mimeType: string;
-  designIdLock: string; styleIdLock: string; contextIdLock: string;
-  cameraIdLock: string; compositionIdLock: string; tattooIdLock: string; placementIdLock: string;
+  designIdLock: string; styleIdLock: string; tattooIdLock?: string | null;
+  placementIdLock?: string | null;
   delta1: string; delta2?: string | null; poseDelta?: string | null; regionHint?: string | null;
   symmetryLock?: boolean; tattooMode?: boolean; maskType?: 'include' | 'exclude'; temperature?: number;
 }) {
@@ -48,8 +48,8 @@ export async function runTattooSurgicalEdit(args: {
 export async function runTattooCreativeDelta(args: {
   baseImageBase64: string; maskImageBase64?: string | null; maskMimeType?: string | null;
   maskType?: 'include' | 'exclude'; referenceImages?: ReferenceAssetInput[]; mimeType: string;
-  designIdLock: string; styleIdLock: string; contextIdLock: string;
-  cameraIdLock: string; compositionIdLock: string; tattooIdLock: string; placementIdLock: string;
+  designIdLock: string; styleIdLock: string; tattooIdLock?: string | null;
+  placementIdLock?: string | null;
   transformation: string; intensity: 'low' | 'medium' | 'high';
   exclusions?: string | null; transferInstruction?: string | null;
   transferMode?: 'none' | 'reference_transfer' | 'locked_reference_transfer';

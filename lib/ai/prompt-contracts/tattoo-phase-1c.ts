@@ -173,11 +173,8 @@ export const TATTOO_PHASE_1C = {
   buildPrompt(args: {
     designIdLock: string;
     styleIdLock: string;
-    contextIdLock: string;
-    cameraIdLock: string;
-    compositionIdLock: string;
-    tattooIdLock: string;
-    placementIdLock: string;
+    tattooIdLock?: string | null;
+    placementIdLock?: string | null;
     transformation: string;
     intensity: 'low' | 'medium' | 'high';
     exclusions?: string | null;
@@ -237,13 +234,18 @@ export const TATTOO_PHASE_1C = {
       referenceGuidance || null,
       '',
       'ACTIVE LOCKSET — VERBATIM:',
+      '--- DESIGN ID (lock) ---',
       args.designIdLock,
+      '',
+      '--- STYLE ID (lock) ---',
       args.styleIdLock,
-      args.contextIdLock,
-      args.cameraIdLock,
-      args.compositionIdLock,
-      args.tattooIdLock,
-      args.placementIdLock,
+      '',
+      args.tattooIdLock && args.tattooIdLock !== '[X]'
+        ? '--- TATTOO SUBJECT ID (lock) ---\n' + args.tattooIdLock
+        : null,
+      args.placementIdLock && args.placementIdLock !== '[X]'
+        ? '--- PLACEMENT ID (lock) ---\n' + args.placementIdLock
+        : null,
       '',
       'CHANGE CONTRACT:',
       'CREATIVE DELTA #1: ' + args.transformation.trim(),

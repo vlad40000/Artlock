@@ -116,11 +116,8 @@ export const TATTOO_PHASE_1B = {
   buildPrompt(args: {
     designIdLock: string;
     styleIdLock: string;
-    contextIdLock: string;
-    cameraIdLock: string;
-    compositionIdLock: string;
-    tattooIdLock: string;
-    placementIdLock: string;
+    tattooIdLock?: string | null;
+    placementIdLock?: string | null;
     references?: {
       designIdLock?: string | null;
       styleIdLock?: string | null;
@@ -188,14 +185,19 @@ export const TATTOO_PHASE_1B = {
       'Rewrite the DELTA internally as an edit to the existing image.',
       'The model must not interpret the DELTA as a new portrait or a full redraw.',
       '',
-      'ACTIVE LOCKSET - VERBATIM:',
+      'ACTIVE LOCKSET — VERBATIM:',
+      '--- DESIGN ID (lock) ---',
       args.designIdLock,
+      '',
+      '--- STYLE ID (lock) ---',
       args.styleIdLock,
-      args.contextIdLock,
-      args.cameraIdLock,
-      args.compositionIdLock,
-      args.tattooIdLock,
-      args.placementIdLock,
+      '',
+      args.tattooIdLock && args.tattooIdLock !== '[X]'
+        ? '--- TATTOO SUBJECT ID (lock) ---\n' + args.tattooIdLock
+        : null,
+      args.placementIdLock && args.placementIdLock !== '[X]'
+        ? '--- PLACEMENT ID (lock) ---\n' + args.placementIdLock
+        : null,
       '',
       'DELTA CONTRACT:',
       'DELTA #1: ' + delta1,

@@ -73,8 +73,6 @@ export async function POST(req: Request) {
       const prompt = TATTOO_PHASE_1B.buildPrompt({
         designIdLock: body.designIdLock ?? '[X]',
         styleIdLock: body.styleIdLock ?? '[X]',
-        contextIdLock: '[X]', cameraIdLock: '[X]', compositionIdLock: '[X]',
-        tattooIdLock: '[X]', placementIdLock: '[X]',
         delta1: body.delta1 ?? 'Make no change — test pass',
         maskMode: 'none', references: [],
       });
