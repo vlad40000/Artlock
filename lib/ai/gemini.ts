@@ -13,6 +13,7 @@ import { downloadAsset } from '../utils/storage';
 import { AI_OPTIMIZE, AI_OPTIMIZE_DEFAULT_INSTRUCTIONS } from './prompt-contracts/ai-optimize';
 import { VOICE_COMMAND } from './prompt-contracts/voice-command';
 import { TATTOO_FLASH_THEME } from './prompt-contracts/tattoo-flash-theme';
+import { TATTOO_FLASH_GENERATE } from './prompt-contracts/tattoo-flash-generate';
 
 
 const Modality = { TEXT: 'TEXT', IMAGE: 'IMAGE' } as any;
@@ -796,4 +797,33 @@ export async function extractFlashTheme(args: {
     composition_rules: parsed.composition_rules ?? '[X]',
     raw_theme_lock:   parsed.raw_theme_lock   ?? '[X]',
   };
+}
+
+// ── Flash Design Generation ───────────────────────────────────────────────────
+
+export async function generateFlashDesign(args: {
+  subjectRequest: string;
+  rawThemeLock: string;
+  paletteLock: string;
+  lineWeightLock: string;
+  shadingLock: string;
+  compositionRules: string;
+  motifLock: string;
+  styleFamilyLock: string;
+  temperature?: number;
+}): Promise<{ base64: string; mimeType: string }> {
+  const prompt = TATTOO_FLASH_GENERATE.buildPrompt(args);
+
+  const response = await generateImageContentWithRetry({
+    model: env.geminiImageModel,
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: prompt }],
+      },
+    ],
+    config: buildImageConfig({ temperature: args.temperature ?? 0.4 }),
+  }, 'flash-design-generation');
+
+  return extractFirstImage(response);
 }

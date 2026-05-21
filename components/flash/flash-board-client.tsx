@@ -126,6 +126,37 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
       setExtractingTheme(false);
     }
   };
+
+  const [showGeneratePanel, setShowGeneratePanel] = useState(false);
+  const [generateSubject, setGenerateSubject] = useState('');
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerate = async () => {
+    if (!activeThemeId || !generateSubject.trim() || generating) return;
+    setGenerating(true);
+    setStatus('GENERATING...');
+    try {
+      const resp = await fetch(`/api/flash/boards/${detail.board.id}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ themeId: activeThemeId, subjectRequest: generateSubject.trim() }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Generation failed');
+      setDesigns(prev => [data.design, ...prev]);
+      setGenerateSubject('');
+      setShowGeneratePanel(false);
+      setStatus('Design generated.');
+      setTimeout(() => setStatus(''), 3000);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Generation failed');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const activeTheme = detail.themes.find(t => t.id === activeThemeId) ?? null;
+
   const filteredDesigns = activeThemeId
     ? designs.filter(d => d.flash_theme_id === activeThemeId)
     : designs;
@@ -188,9 +219,14 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
             Add Design
           </button>
           <button
-            disabled={busy}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-tls-amber text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-40"
-            onClick={() => setStatus('Theme generation coming in step 3')}
+            disabled={busy || generating}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-colors disabled:opacity-40 ${
+              activeThemeId
+                ? 'bg-tls-amber text-black hover:bg-white'
+                : 'bg-white/10 text-white/40 cursor-not-allowed'
+            }`}
+            onClick={() => activeThemeId && setShowGeneratePanel(true)}
+            title={activeThemeId ? 'Generate a new design from active theme' : 'Select a theme first'}
           >
             <Sparkles size={13} />
             Generate
@@ -259,7 +295,7 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
                 </button>
                 <button
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-tls-amber text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
-                  onClick={() => setStatus('Theme generation coming in step 3')}
+                  onClick={() => activeThemeId ? setShowGeneratePanel(true) : setStatus('Select a theme first')}
                 >
                   <Sparkles size={13} />
                   Generate
@@ -367,6 +403,84 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
           </aside>
         )}
       </div>
+      {/* Generate panel */}
+      {showGeneratePanel && activeTheme && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !generating && setShowGeneratePanel(false)} />
+          <div className="relative w-[min(520px,92vw)] bg-tls-panel border border-tls-border rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-[0.22em] text-tls-amber mb-1">Generate Flash Design</div>
+                <div className="text-white font-black text-base">{activeTheme.title}</div>
+              </div>
+              <button onClick={() => !generating && setShowGeneratePanel(false)} className="text-white/30 hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Active theme summary */}
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 space-y-2">
+                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">Active Theme Lock</div>
+                <div className="text-white/60 text-[11px] leading-relaxed italic">
+                  {activeTheme.raw_theme_lock?.slice(0, 180)}…
+                </div>
+                <div className="flex gap-2 flex-wrap mt-2">
+                  {activeTheme.style_family && (
+                    <span className="px-2 py-0.5 rounded-full bg-tls-amber/10 border border-tls-amber/20 text-tls-amber text-[9px] font-black uppercase tracking-widest">
+                      {activeTheme.style_family}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Subject input */}
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-2">What to generate</div>
+                <textarea
+                  autoFocus
+                  value={generateSubject}
+                  onChange={(e) => setGenerateSubject(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleGenerate()}
+                  placeholder={`e.g. "a bold eagle with spread wings" or "a rose with a dagger through it"`}
+                  rows={3}
+                  disabled={generating}
+                  className="w-full bg-white/[0.05] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-tls-amber placeholder:text-white/20 resize-none disabled:opacity-50"
+                />
+                <div className="text-[10px] text-white/20 mt-1">Shift+Enter for new line · Enter to generate</div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-white/[0.06] flex gap-3">
+              <button
+                onClick={() => !generating && setShowGeneratePanel(false)}
+                disabled={generating}
+                className="flex-1 py-3 rounded-xl border border-white/10 text-white/50 text-[11px] font-black uppercase tracking-widest hover:bg-white/5 transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerate}
+                disabled={generating || !generateSubject.trim()}
+                className="flex-1 py-3 rounded-xl bg-tls-amber text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {generating ? (
+                  <>
+                    <Sparkles size={13} className="animate-pulse" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={13} />
+                    Generate
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Theme detail modal */}
       {themeDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
