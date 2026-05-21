@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Upload, ArrowLeft, Layers, Sparkles, CheckCircle2, X, Tag, MapPin } from 'lucide-react';
+import { Plus, Upload, ArrowLeft, Layers, Sparkles, CheckCircle2, X, Tag, MapPin, Download } from 'lucide-react';
 import type { FlashBoardDetail, FlashDesign, FlashTheme } from '@/types/flash';
 
 const STATUS_COLORS = {
@@ -97,6 +97,47 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
   const [designs, setDesigns] = useState<FlashDesign[]>(detail.designs);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
+
+  // Export mode
+  const [exportMode, setExportMode] = useState(false);
+  const [exportSelected, setExportSelected] = useState<Set<string>>(new Set());
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [exportLayout, setExportLayout] = useState<'1x1'|'1x2'|'2x2'|'2x3'|'3x3'>('2x2');
+  const [exportTitle, setExportTitle] = useState(detail.board.title);
+  const [exporting, setExporting] = useState(false);
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
+
+  const toggleExportSelect = (id: string) => {
+    setExportSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleExport = async () => {
+    if (exportSelected.size === 0 || exporting) return;
+    setExporting(true);
+    try {
+      const resp = await fetch(`/api/flash/boards/${detail.board.id}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          designIds: Array.from(exportSelected),
+          layout: exportLayout,
+          sheetTitle: exportTitle.trim() || detail.board.title,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Export failed');
+      setExportUrl(data.export.url);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Export failed');
+      setShowExportPanel(false);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const [extractingTheme, setExtractingTheme] = useState(false);
   const [themeDetail, setThemeDetail] = useState<FlashTheme | null>(null);
@@ -210,27 +251,58 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
         </div>
         <div className="flex items-center gap-2">
           {status && <span className="text-[10px] font-black uppercase tracking-widest text-tls-amber">{status}</span>}
-          <button
-            onClick={() => uploadRef.current?.click()}
-            disabled={busy}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white/60 text-[11px] font-black uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors disabled:opacity-40"
-          >
-            <Upload size={13} />
-            Add Design
-          </button>
-          <button
-            disabled={busy || generating}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-colors disabled:opacity-40 ${
-              activeThemeId
-                ? 'bg-tls-amber text-black hover:bg-white'
-                : 'bg-white/10 text-white/40 cursor-not-allowed'
-            }`}
-            onClick={() => activeThemeId && setShowGeneratePanel(true)}
-            title={activeThemeId ? 'Generate a new design from active theme' : 'Select a theme first'}
-          >
-            <Sparkles size={13} />
-            Generate
-          </button>
+          {!exportMode ? (
+            <>
+              <button
+                onClick={() => uploadRef.current?.click()}
+                disabled={busy}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white/60 text-[11px] font-black uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors disabled:opacity-40"
+              >
+                <Upload size={13} />
+                Add Design
+              </button>
+              <button
+                disabled={busy || generating}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-colors disabled:opacity-40 ${
+                  activeThemeId
+                    ? 'bg-tls-amber text-black hover:bg-white'
+                    : 'bg-white/10 text-white/40 cursor-not-allowed'
+                }`}
+                onClick={() => activeThemeId && setShowGeneratePanel(true)}
+                title={activeThemeId ? 'Generate a new design from active theme' : 'Select a theme first'}
+              >
+                <Sparkles size={13} />
+                Generate
+              </button>
+              <button
+                onClick={() => { setExportMode(true); setExportSelected(new Set()); setSelectedDesign(null); }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white/60 text-[11px] font-black uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors"
+              >
+                <Download size={13} />
+                Export Sheet
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                {exportSelected.size} selected
+              </span>
+              <button
+                onClick={() => { setExportMode(false); setExportSelected(new Set()); }}
+                className="px-4 py-2 rounded-xl border border-white/10 text-white/50 text-[11px] font-black uppercase tracking-widest hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={exportSelected.size === 0}
+                onClick={() => setShowExportPanel(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-tls-amber text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-40"
+              >
+                <Download size={13} />
+                Build Sheet ({exportSelected.size})
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -305,20 +377,61 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {filteredDesigns.map(design => (
-                <DesignCard
+                <button
                   key={design.id}
-                  design={design}
-                  selected={selectedDesign?.id === design.id}
-                  onSelect={handleSelectDesign}
-                />
+                  onClick={() => exportMode ? toggleExportSelect(design.id) : handleSelectDesign(design)}
+                  className={`group relative aspect-square overflow-hidden rounded-2xl border-2 transition-all duration-300 hover:scale-[1.02] hover:z-10 ${
+                    exportMode
+                      ? exportSelected.has(design.id)
+                        ? 'border-tls-amber ring-4 ring-tls-amber/20 z-10'
+                        : 'border-white/[0.08] hover:border-tls-amber/40'
+                      : selectedDesign?.id === design.id
+                        ? 'border-tls-amber ring-4 ring-tls-amber/20 z-10'
+                        : 'border-white/[0.08] hover:border-white/30'
+                  }`}
+                >
+                  {design.blob_url ? (
+                    <img src={design.blob_url} className="absolute inset-0 w-full h-full object-cover" alt={design.title ?? 'Flash design'} />
+                  ) : (
+                    <div className="absolute inset-0 bg-white/[0.03] flex items-center justify-center">
+                      <Layers size={24} className="text-white/10" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[design.status]}`}>
+                    {design.status}
+                  </div>
+                  {design.is_ai_generated && (
+                    <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-tls-amber/20 border border-tls-amber/30 flex items-center justify-center">
+                      <Sparkles size={10} className="text-tls-amber" />
+                    </div>
+                  )}
+                  {exportMode && exportSelected.has(design.id) && (
+                    <div className="absolute bottom-2 right-2">
+                      <CheckCircle2 size={18} className="text-tls-amber fill-tls-amber" />
+                    </div>
+                  )}
+                  {!exportMode && selectedDesign?.id === design.id && (
+                    <div className="absolute bottom-2 right-2">
+                      <CheckCircle2 size={18} className="text-tls-amber fill-tls-amber" />
+                    </div>
+                  )}
+                  {design.title && (
+                    <div className="absolute bottom-0 inset-x-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="text-white text-[10px] font-black uppercase tracking-widest truncate">{design.title}</div>
+                    </div>
+                  )}
+                </button>
               ))}
-              <button
-                onClick={() => uploadRef.current?.click()}
-                className="aspect-square rounded-2xl border-2 border-dashed border-white/[0.06] hover:border-white/20 hover:bg-white/[0.02] transition-all flex flex-col items-center justify-center gap-3 group"
-              >
-                <Plus size={20} className="text-white/10 group-hover:text-white/40 transition-colors" />
-                <span className="text-[9px] font-black uppercase tracking-widest text-white/10 group-hover:text-white/30">Add</span>
-              </button>
+              {!exportMode && (
+                <button
+                  onClick={() => uploadRef.current?.click()}
+                  className="aspect-square rounded-2xl border-2 border-dashed border-white/[0.06] hover:border-white/20 hover:bg-white/[0.02] transition-all flex flex-col items-center justify-center gap-3 group"
+                >
+                  <Plus size={20} className="text-white/10 group-hover:text-white/40 transition-colors" />
+                  <span className="text-[9px] font-black uppercase tracking-widest text-white/10 group-hover:text-white/30">Add</span>
+                </button>
+              )}
             </div>
           )}
         </main>
@@ -403,6 +516,117 @@ export function FlashBoardClient({ detail }: { detail: FlashBoardDetail }) {
           </aside>
         )}
       </div>
+      {/* Export panel */}
+      {showExportPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !exporting && setShowExportPanel(false)} />
+          <div className="relative w-[min(480px,92vw)] bg-tls-panel border border-tls-border rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-[0.22em] text-tls-amber mb-1">Export Flash Sheet</div>
+                <div className="text-white font-black text-base">{exportSelected.size} design{exportSelected.size !== 1 ? 's' : ''} selected</div>
+              </div>
+              <button onClick={() => !exporting && setShowExportPanel(false)} className="text-white/30 hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Sheet title */}
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-2">Sheet Title</div>
+                <input
+                  value={exportTitle}
+                  onChange={e => setExportTitle(e.target.value)}
+                  disabled={exporting}
+                  className="w-full bg-white/[0.05] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-tls-amber placeholder:text-white/20 disabled:opacity-50"
+                />
+              </div>
+
+              {/* Layout picker */}
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-2">Layout</div>
+                <div className="grid grid-cols-5 gap-2">
+                  {([
+                    ['1x1', '1'],
+                    ['1x2', '1×2'],
+                    ['2x2', '2×2'],
+                    ['2x3', '2×3'],
+                    ['3x3', '3×3'],
+                  ] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setExportLayout(val)}
+                      disabled={exporting}
+                      className={`py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
+                        exportLayout === val
+                          ? 'border-tls-amber bg-tls-amber text-black'
+                          : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-[10px] text-white/25 mt-2">11×14 inch sheet @ 300 DPI</div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-white/[0.06] flex gap-3">
+              <button
+                onClick={() => !exporting && setShowExportPanel(false)}
+                disabled={exporting}
+                className="flex-1 py-3 rounded-xl border border-white/10 text-white/50 text-[11px] font-black uppercase tracking-widest hover:bg-white/5 transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex-1 py-3 rounded-xl bg-tls-amber text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {exporting ? (
+                  <><Download size={13} className="animate-bounce" /> Building...</>
+                ) : (
+                  <><Download size={13} /> Build Sheet</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export result */}
+      {exportUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setExportUrl(null); setShowExportPanel(false); setExportMode(false); setExportSelected(new Set()); }} />
+          <div className="relative w-[min(560px,92vw)] bg-tls-panel border border-tls-border rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-[0.22em] text-tls-emerald mb-1">Sheet Ready</div>
+                <div className="text-white font-black text-base">Flash Sheet Built</div>
+              </div>
+              <button onClick={() => { setExportUrl(null); setShowExportPanel(false); setExportMode(false); setExportSelected(new Set()); }} className="text-white/30 hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6">
+              <img src={exportUrl} className="w-full rounded-xl border border-white/10 mb-6" alt="Flash Sheet Preview" />
+              <a
+                href={exportUrl}
+                download="flash-sheet.png"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-tls-amber text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
+              >
+                <Download size={13} />
+                Download Sheet
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Generate panel */}
       {showGeneratePanel && activeTheme && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
