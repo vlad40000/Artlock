@@ -247,37 +247,37 @@ export async function POST(
       mimeType: editedMimeType,
     });
 
-    // Save asset metadata to Neon
-    await sql`
-      INSERT INTO assets (
-        id, project_id, kind, blob_url, mime_type, 
-        width, height, source_asset_id, created_by_phase
-      ) VALUES (
-        ${outputAssetId}, ${detail.project.id}, 'generated', ${blobUrl}, ${editedMimeType},
-        ${outputDimensions?.width ?? baseAsset.width}, ${outputDimensions?.height ?? baseAsset.height}, ${baseAsset.id}, '1B'
-      )
-    `;
-
-    // Save edit run to Neon
+    // Save asset + edit_run atomically
     const editRunId = randomUUID();
-    await sql`
-      INSERT INTO edit_runs (
-        id, session_id, phase, base_asset_id, output_asset_id, 
-        lock_id, mask_asset_id, visual_delta_1, visual_delta_2, 
-        pose_delta, target_region_json, status, model_name, 
-        prompt_contract_version
-      ) VALUES (
-        ${editRunId}, ${sessionId}, '1B', ${baseAsset.id}, ${outputAssetId},
-        ${lock.id}, ${maskAsset?.id ?? null}, ${body.delta1}, ${body.delta2 ?? null},
-        'none', ${JSON.stringify({
-          regionHint: body.regionHint ?? null,
-          maskAssetId: maskAsset?.id ?? null,
-          referenceAssetIds: uniqueReferenceAssetIds,
-          driftValidation,
-        })},
-        'succeeded', ${env.geminiImageModel}, ${TATTOO_PHASE_1B.version}
-      )
-    `;
+    await sql.transaction(async (tx) => {
+      await tx`
+        INSERT INTO assets (
+          id, project_id, kind, blob_url, mime_type,
+          width, height, source_asset_id, created_by_phase
+        ) VALUES (
+          ${outputAssetId}, ${detail.project.id}, 'generated', ${blobUrl}, ${editedMimeType},
+          ${outputDimensions?.width ?? baseAsset.width}, ${outputDimensions?.height ?? baseAsset.height}, ${baseAsset.id}, '1B'
+        )
+      `;
+      await tx`
+        INSERT INTO edit_runs (
+          id, session_id, phase, base_asset_id, output_asset_id,
+          lock_id, mask_asset_id, visual_delta_1, visual_delta_2,
+          pose_delta, target_region_json, status, model_name,
+          prompt_contract_version
+        ) VALUES (
+          ${editRunId}, ${sessionId}, '1B', ${baseAsset.id}, ${outputAssetId},
+          ${lock.id}, ${maskAsset?.id ?? null}, ${body.delta1}, ${body.delta2 ?? null},
+          'none', ${JSON.stringify({
+            regionHint: body.regionHint ?? null,
+            maskAssetId: maskAsset?.id ?? null,
+            referenceAssetIds: uniqueReferenceAssetIds,
+            driftValidation,
+          })},
+          'succeeded', ${env.geminiImageModel}, ${TATTOO_PHASE_1B.version}
+        )
+      `;
+    });
 
     return NextResponse.json({
       status: 'succeeded',

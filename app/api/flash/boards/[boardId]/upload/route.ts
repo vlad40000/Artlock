@@ -51,28 +51,31 @@ export async function POST(req: Request, context: { params: Promise<{ boardId: s
       { access: 'public', contentType: file.type || 'image/png' },
     );
 
-    // Create asset record
-    await sql`
-      INSERT INTO assets (id, project_id, kind, blob_url, mime_type, created_by_phase)
-      VALUES (${assetId}, ${projectId}, 'flash', ${blob.url}, ${file.type || 'image/png'}, 'flash-upload')
-    `;
+    interface DesignRow { id: string; flash_board_id: string; flash_theme_id: string | null; asset_id: string; stencil_asset_id: string | null; title: string | null; tags: string[]; placement_hint: string | null; status: string; sort_order: number; generation_prompt: string | null; is_ai_generated: boolean; created_at: string; updated_at: string; }
 
-    // Create flash_design record
-    const designs = await sql`
-      INSERT INTO flash_designs (
-        flash_board_id, asset_id, title, tags, placement_hint,
-        status, is_ai_generated
-      ) VALUES (
-        ${boardId}, ${assetId}, ${title}, ${tags},
-        ${placementHint}, 'ready', false
-      )
-      RETURNING id, flash_board_id, flash_theme_id, asset_id, stencil_asset_id,
-                title, tags, placement_hint, status, sort_order,
-                generation_prompt, is_ai_generated, created_at, updated_at
-    ` as any[];
+    let design: DesignRow;
+    await sql.transaction(async (tx) => {
+      await tx`
+        INSERT INTO assets (id, project_id, kind, blob_url, mime_type, created_by_phase)
+        VALUES (${assetId}, ${projectId}, 'flash', ${blob.url}, ${file.type || 'image/png'}, 'flash-upload')
+      `;
+      const rows = await tx`
+        INSERT INTO flash_designs (
+          flash_board_id, asset_id, title, tags, placement_hint,
+          status, is_ai_generated
+        ) VALUES (
+          ${boardId}, ${assetId}, ${title}, ${tags},
+          ${placementHint}, 'ready', false
+        )
+        RETURNING id, flash_board_id, flash_theme_id, asset_id, stencil_asset_id,
+                  title, tags, placement_hint, status, sort_order,
+                  generation_prompt, is_ai_generated, created_at, updated_at
+      ` as DesignRow[];
+      design = rows[0];
+    });
 
     return NextResponse.json({
-      design: { ...designs[0], blob_url: blob.url },
+      design: { ...design!, blob_url: blob.url },
     }, { status: 201 });
   } catch (error) {
     return apiErrorResponse(error, { route: 'flash-design-upload' });

@@ -112,31 +112,32 @@ export async function POST(
       mimeType: edited.mimeType,
     });
 
-    await sql`
-      INSERT INTO assets (
-        id, project_id, kind, blob_url, mime_type, width, height, source_asset_id, created_by_phase
-      ) VALUES (
-        ${outputAssetId}, ${detail.project.id}, 'generated', ${blobUrl}, ${edited.mimeType},
-        ${outputDimensions.width ?? baseWidth}, ${outputDimensions.height ?? baseHeight}, ${baseAsset.id}, '3'
-      )
-    `;
-
     const editRunId = randomUUID();
-    await sql`
-      INSERT INTO edit_runs (
-        id, session_id, phase, base_asset_id, output_asset_id, lock_id, mask_asset_id,
-        visual_delta_1, visual_delta_2, pose_delta, target_region_json, status, model_name, prompt_contract_version
-      ) VALUES (
-        ${editRunId}, ${sessionId}, '3', ${baseAsset.id}, ${outputAssetId}, ${baseLock.id}, null,
-        ${'Variant Sheet: LINEWORK / BLACK & GREY / COLOR'}, ${body.constraints ?? null}, 'none',
-        ${JSON.stringify({
-          layout: body.layout,
-          outputs: ['linework', 'black_grey', 'color_or_blackwork'],
-          constraints: body.constraints ?? null,
-        })},
-        'succeeded', ${env.geminiImageModel}, ${TATTOO_PHASE_3.version}
-      )
-    `;
+    await sql.transaction(async (tx) => {
+      await tx`
+        INSERT INTO assets (
+          id, project_id, kind, blob_url, mime_type, width, height, source_asset_id, created_by_phase
+        ) VALUES (
+          ${outputAssetId}, ${detail.project.id}, 'generated', ${blobUrl}, ${edited.mimeType},
+          ${outputDimensions.width ?? baseWidth}, ${outputDimensions.height ?? baseHeight}, ${baseAsset.id}, '3'
+        )
+      `;
+      await tx`
+        INSERT INTO edit_runs (
+          id, session_id, phase, base_asset_id, output_asset_id, lock_id, mask_asset_id,
+          visual_delta_1, visual_delta_2, pose_delta, target_region_json, status, model_name, prompt_contract_version
+        ) VALUES (
+          ${editRunId}, ${sessionId}, '3', ${baseAsset.id}, ${outputAssetId}, ${baseLock.id}, null,
+          ${'Variant Sheet: LINEWORK / BLACK & GREY / COLOR'}, ${body.constraints ?? null}, 'none',
+          ${JSON.stringify({
+            layout: body.layout,
+            outputs: ['linework', 'black_grey', 'color_or_blackwork'],
+            constraints: body.constraints ?? null,
+          })},
+          'succeeded', ${env.geminiImageModel}, ${TATTOO_PHASE_3.version}
+        )
+      `;
+    });
 
     return NextResponse.json({
       status: 'succeeded',
